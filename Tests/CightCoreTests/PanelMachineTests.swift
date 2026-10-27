@@ -66,6 +66,29 @@ struct PanelMachineTests {
     #expect(machine.phase == .hidden)
   }
 
+  @Test func theGraceIsNoLongerThanOneFrameOfPointerEvents() {
+    #expect(PanelMachine.grace <= 0.05)
+    #expect(PanelMachine.grace > 0)
+  }
+
+  @Test func crossingTheGapFromIconToPanelNeverHides() {
+    var machine = hoverOpen()
+    let grace = timer(machine.handle(away))!
+    #expect(grace.delay == PanelMachine.grace)
+    #expect(machine.handle(onPanel) == [.cancelTimer])
+    #expect(machine.handle(.timer(grace)).isEmpty)
+    #expect(machine.phase == .hoverOpen)
+    #expect(machine.handle(away).count == 1)
+    #expect(machine.phase == .closing)
+  }
+
+  @Test func leavingBothWhilePinnedSchedulesNothing() {
+    var machine = PanelMachine()
+    _ = machine.handle(.iconClick)
+    #expect(machine.handle(away).isEmpty)
+    #expect(machine.phase == .pinned)
+  }
+
   @Test func movingFromIconToPanelKeepsItOpen() {
     var machine = hoverOpen()
     #expect(machine.handle(onPanel).isEmpty)
