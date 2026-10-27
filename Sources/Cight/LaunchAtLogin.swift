@@ -1,134 +1,91 @@
 import AppKit
 import CightCore
-import CryptoKit
-import Foundation
 import Observation
-import ServiceManagement
 
 enum LaunchAgent {
-  static let label = "com.vuhnger.cight.agent"
-  static let plistName = "\(label).plist"
-  static let argument = "--launch-agent"
-  static let waitArgument = "--wait-for-lock"
-
-  @MainActor static var lock: InstanceLock?
-
-  static var lockURL: URL {
-    URL.applicationSupportDirectory.appending(path: "Cight/instance.lock")
+  static var plistURL: URL {
+    URL.homeDirectory.appending(path: "Library/LaunchAgents/\(LaunchAgentPlist.label).plist")
   }
 
-  static var service: SMAppService { SMAppService.agent(plistName: plistName) }
+  static var service: String { "gui/\(getuid())/\(LaunchAgentPlist.label)" }
 
-  static func has(_ flag: String) -> Bool { CommandLine.arguments.dropFirst().contains(flag) }
+  static var executable: String { Bundle.main.executablePath ?? CommandLine.arguments[0] }
 
-  static func isEnabled() -> Bool { service.status == .enabled }
-
-  static func isStale(defaults: UserDefaults) -> Bool {
-    guard let current = identity() else { return false }
-    return ReregisterPolicy.shouldReregister(
-      agentEnabled: isEnabled(), stored: AgentIdentity.load(from: defaults), current: current)
+  static var byLaunchd: Bool {
+    CommandLine.arguments.dropFirst().contains(LaunchAgentPlist.argument)
   }
 
-  static func start(fresh: Bool) -> Bool {
-    for attempt in 0..<2 {
-      if fresh && attempt == 0 {
-        try? service.unregister()
-        Thread.sleep(forTimeInterval: 2)
-        try? service.register()
-      }
-      kickstart()
-      guard InstanceLock.waitForHolder(at: lockURL, timeout: 5) == .held else { continue }
-      identity()?.save(to: .standard)
-      return true
+  static func isLoaded() -> Bool {
+    run("/bin/launchctl", ["print", service]) == 0
+  }
+
+  static func enable() -> Bool {
+    do {
+      try FileManager.default.createDirectory(
+        at: plistURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+      try LaunchAgentPlist.render(program: executable).write(to: plistURL, options: .atomic)
+    } catch {
+      return false
     }
+    if run("/bin/launchctl", ["bootstrap", "gui/\(getuid())", plistURL.path]) == 0 { return true }
+    try? FileManager.default.removeItem(at: plistURL)
     return false
   }
 
-  private static func kickstart() {
-    let process = Process()
-    process.executableURL = URL(filePath: "/bin/launchctl")
-    process.arguments = ["kickstart", "gui/\(getuid())/\(label)"]
-    process.standardOutput = FileHandle.nullDevice
-    process.standardError = FileHandle.nullDevice
-    try? process.run()
-    process.waitUntilExit()
+  static func disable() -> Bool {
+    if byLaunchd {
+      let script = #"launchctl bootout "$1"; rm -f "$2"; open -n "$3""#
+      let args = ["-c", script, "sh", service, plistURL.path, Bundle.main.bundleURL.path]
+      return (try? Process.run(URL(filePath: "/bin/sh"), arguments: args)) != nil
+    }
+    let unloaded = !isLoaded() || run("/bin/launchctl", ["bootout", service]) == 0
+    if unloaded { try? FileManager.default.removeItem(at: plistURL) }
+    return unloaded
   }
 
-  private static func identity() -> AgentIdentity? {
-    guard
-      let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String,
-      let url = Bundle.main.executableURL,
-      let data = try? Data(contentsOf: url, options: .mappedIfSafe)
-    else { return nil }
-    let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
-    return AgentIdentity(version: version, binaryHash: digest)
+  static func repairPath() {
+    guard let data = try? Data(contentsOf: plistURL),
+      LaunchAgentPlist.program(in: data) != executable
+    else { return }
+    try? LaunchAgentPlist.render(program: executable).write(to: plistURL, options: .atomic)
+  }
+
+  private static func run(_ tool: String, _ arguments: [String]) -> Int32 {
+    let process = Process()
+    process.executableURL = URL(filePath: tool)
+    process.arguments = arguments
+    process.standardOutput = FileHandle.nullDevice
+    process.standardError = FileHandle.nullDevice
+    guard (try? process.run()) != nil else { return -1 }
+    process.waitUntilExit()
+    return process.terminationStatus
   }
 }
 
 @MainActor
 @Observable
 final class LaunchAtLogin {
-  private(set) var status = LaunchAtLogin.map(LaunchAgent.service.status)
+  private(set) var isOn = LaunchAgent.isLoaded()
+  private(set) var busy = false
   private(set) var error: String?
 
-  var presentation: LoginItemPresentation { LoginItemPresentation(status: status) }
+  func refresh() {
+    Task { isOn = await Task.detached { LaunchAgent.isLoaded() }.value }
+  }
 
   func set(_ enabled: Bool) {
-    Task { await enabled ? enable() : disable() }
-  }
-
-  func refresh() {
-    status = LaunchAtLogin.map(LaunchAgent.service.status)
-  }
-
-  func openSystemSettings() {
-    SMAppService.openSystemSettingsLoginItems()
-  }
-
-  private func enable() async {
-    LaunchAgent.lock?.release()
-    let started = await Task.detached { LaunchAgent.start(fresh: true) }.value
-    refresh()
-    if started {
-      error = nil
-      NSApp.terminate(nil)
-      return
-    }
-    LaunchAgent.lock = InstanceLock.acquire(at: LaunchAgent.lockURL).lock
-    if LaunchAgent.lock == nil { NSApp.terminate(nil) }
-    error = "Cight could not start its background agent. Try again."
-  }
-
-  private func disable() async {
-    if LaunchAgent.has(LaunchAgent.argument) {
-      let configuration = NSWorkspace.OpenConfiguration()
-      configuration.createsNewApplicationInstance = true
-      configuration.activates = false
-      configuration.arguments = [LaunchAgent.waitArgument]
-      do {
-        _ = try await NSWorkspace.shared.openApplication(
-          at: Bundle.main.bundleURL, configuration: configuration)
-      } catch {
-        self.error = "Could not disable launch at login: \(error.localizedDescription)"
+    guard !busy else { return }
+    busy = true
+    Task {
+      let ok = await Task.detached { enabled ? LaunchAgent.enable() : LaunchAgent.disable() }.value
+      isOn = await Task.detached { LaunchAgent.isLoaded() }.value
+      busy = false
+      guard ok else {
+        error = "Could not turn launch at login \(enabled ? "on" : "off")."
         return
       }
-    }
-    do {
-      try await LaunchAgent.service.unregister()
       error = nil
-    } catch {
-      self.error = "Could not disable launch at login: \(error.localizedDescription)"
-    }
-    refresh()
-  }
-
-  private static func map(_ status: SMAppService.Status) -> LoginItemStatus {
-    switch status {
-    case .enabled: .enabled
-    case .requiresApproval: .requiresApproval
-    case .notFound: .notFound
-    case .notRegistered: .notRegistered
-    @unknown default: .notRegistered
+      if enabled { NSApp.terminate(nil) }
     }
   }
 }
