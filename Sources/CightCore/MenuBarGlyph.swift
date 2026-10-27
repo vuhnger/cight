@@ -7,6 +7,7 @@ public enum MenuBarGlyph: Sendable, Equatable {
   case queued
   case passed
   case signedOut
+  case idle
 }
 
 public struct MenuBarRepo: Sendable {
@@ -33,7 +34,9 @@ public enum MenuBarGlyphs {
   }
 
   public static func glyphs(repos: [MenuBarRepo], signedOut: Bool, now: Date) -> [MenuBarGlyph] {
-    signedOut ? [.signedOut] : repos.compactMap { glyph(for: $0, now: now) }
+    if signedOut { return [.signedOut] }
+    let active = repos.compactMap { glyph(for: $0, now: now) }.filter { $0 != .passed }
+    return active.isEmpty ? [.idle] : active
   }
 
   private static func runningGlyph(_ repo: MenuBarRepo, now: Date) -> MenuBarGlyph {

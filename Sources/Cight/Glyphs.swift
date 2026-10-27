@@ -21,6 +21,7 @@ enum GlyphKind: Equatable {
     case .running(let progress): self = .running(progress)
     case .overdue: self = .overdue
     case .signedOut: self = .signedOut
+    case .idle: self = .neutral
     case nil: self = .neutral
     }
   }
