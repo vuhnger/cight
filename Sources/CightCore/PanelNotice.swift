@@ -14,6 +14,17 @@ public enum NoticePolicy {
     ghInstalled: Bool, tokenAvailable: Bool, watchedCount: Int, errors: [GitHubError],
     lastUpdated: Date?
   ) -> PanelNotice? {
-    nil
+    if !ghInstalled { return .ghMissing }
+    if !tokenAvailable || errors.contains(.unauthorized) { return .signedOut }
+    if watchedCount == 0 { return .nothingWatched }
+    let resumes = errors.compactMap { error -> Date? in
+      if case .rateLimited(let date) = error { date } else { nil }
+    }
+    if let latest = resumes.max() { return .rateLimited(until: latest) }
+    if errors.contains(where: { if case .transport = $0 { true } else { false } }) {
+      return .offline(since: lastUpdated)
+    }
+    if errors.contains(where: { $0 != .notFound }) { return .unavailable(since: lastUpdated) }
+    return nil
   }
 }
