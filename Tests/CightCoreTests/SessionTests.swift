@@ -4,21 +4,52 @@ import Testing
 @testable import CightCore
 
 struct SessionTests {
-  @Test func signedOutNotifiesOncePerEpisodeEvenAcrossOfflinePolls() {
-    var gate = SignOutGate()
-    let states: [SessionState] = [.signedOut, .unknown, .signedOut]
-    #expect(states.map { gate.shouldNotify($0) } == [true, false, false])
+  private func gate() -> (SignOutGate, UserDefaults) {
+    let defaults = UserDefaults(suiteName: UUID().uuidString)!
+    return (SignOutGate(defaults: defaults), defaults)
   }
 
-  @Test func onlyASuccessfulPollStartsANewEpisode() {
-    var gate = SignOutGate()
-    let states: [SessionState] = [.signedOut, .unknown, .signedIn, .unknown, .signedOut]
-    #expect(states.map { gate.shouldNotify($0) } == [true, false, false, false, true])
+  private func run(_ gate: inout SignOutGate, _ states: [SessionState]) -> [Bool] {
+    states.map { gate.shouldNotify($0) }
   }
 
-  @Test func aLaunchWhileSignedOutNotifiesOnce() {
-    var gate = SignOutGate()
-    #expect([SessionState.signedOut, .signedOut].map { gate.shouldNotify($0) } == [true, false])
+  @Test func needsTwoConsecutiveSignedOutResults() {
+    var (gate, _) = gate()
+    #expect(run(&gate, [.signedOut, .signedOut]) == [false, true])
+  }
+
+  @Test func anOfflinePollBetweenDoesNotCountAsRecovery() {
+    var (gate, _) = gate()
+    #expect(run(&gate, [.signedOut, .unknown, .signedOut]) == [false, false, true])
+  }
+
+  @Test func aSuccessfulPollBetweenRestartsTheCount() {
+    var (gate, _) = gate()
+    #expect(run(&gate, [.signedOut, .signedIn, .signedOut]) == [false, false, false])
+  }
+
+  @Test func keepsAskingUntilAPostActuallyHappens() {
+    var (gate, _) = gate()
+    #expect(run(&gate, [.signedOut, .signedOut, .signedOut]) == [false, true, true])
+    gate.didPost()
+    #expect(run(&gate, [.signedOut, .unknown, .signedOut]) == [false, false, false])
+  }
+
+  @Test func anEpisodeSurvivesARestart() {
+    var (first, defaults) = gate()
+    _ = run(&first, [.signedOut, .signedOut])
+    first.didPost()
+    var second = SignOutGate(defaults: defaults)
+    #expect(run(&second, [.signedOut, .signedOut, .signedOut]) == [false, false, false])
+  }
+
+  @Test func aSuccessfulPollEndsTheEpisodeAcrossRestarts() {
+    var (first, defaults) = gate()
+    _ = run(&first, [.signedOut, .signedOut])
+    first.didPost()
+    _ = first.shouldNotify(.signedIn)
+    var second = SignOutGate(defaults: defaults)
+    #expect(run(&second, [.signedOut, .signedOut]) == [false, true])
   }
 
   @Test func unauthorizedBeatsSuccessfulRepos() {

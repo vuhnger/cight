@@ -65,6 +65,16 @@ struct SettingsModelTests {
     #expect(model.loadMessage == nil)
   }
 
+  @Test func anOfflineSampleBetweenDoesNotHideTheSignIn() async {
+    let model = makeModel { _ in Reply(status: 401) }
+    await model.loadRepos()
+    await model.sessionChanged(.signedOut)
+    await model.sessionChanged(.unknown)
+    Stub.install { _ in Reply(body: reposJSON) }
+    await model.sessionChanged(.signedIn)
+    #expect(model.allRepos.count == 2)
+  }
+
   @Test func theFirstSuccessfulPollDoesNotTriggerASecondLoad() async {
     let model = makeModel { _ in Reply(body: reposJSON) }
     await model.loadRepos()
