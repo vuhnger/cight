@@ -34,6 +34,7 @@ cat > "$APP/Contents/Info.plist" <<EOF
     <key>SUFeedURL</key><string>https://github.com/vuhnger/cight/releases/latest/download/appcast.xml</string>
     <key>SUPublicEDKey</key><string>KJb0mhg+N3GeTm8e/Qu3STExwm8EydlUf2Tj6s1sTQ8=</string>
     <key>SUEnableAutomaticChecks</key><true/>
+    <key>SUAllowsAutomaticUpdates</key><false/>
 </dict>
 </plist>
 EOF
