@@ -21,6 +21,10 @@ public struct Repo: Decodable, Sendable, Equatable, Identifiable {
   public let defaultBranch: String
 }
 
+public struct Branch: Decodable, Sendable, Equatable {
+  public let name: String
+}
+
 public struct Account: Decodable, Sendable, Equatable {
   public let login: String
   public let avatarUrl: String?

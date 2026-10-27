@@ -43,6 +43,7 @@ public struct PanelMachine: Sendable {
   public private(set) var phase = PanelPhase.hidden
   private var token = 0
   private var armed = true
+  private var overIcon = false
 
   public init() {}
 
@@ -65,6 +66,7 @@ public struct PanelMachine: Sendable {
   }
 
   private mutating func pointer(overIcon: Bool, overPanel: Bool) -> [PanelEffect] {
+    self.overIcon = overIcon
     if !overIcon { armed = true }
     switch phase {
     case .hidden:
@@ -114,7 +116,7 @@ public struct PanelMachine: Sendable {
   private mutating func close() -> [PanelEffect] {
     let hadTimer = phase == .closing
     phase = .hidden
-    armed = false
+    armed = !overIcon
     token += 1
     return (hadTimer ? [.cancelTimer] : []) + [.hide]
   }

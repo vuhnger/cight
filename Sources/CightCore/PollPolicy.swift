@@ -37,7 +37,10 @@ public enum PollPolicy {
   }
 
   public static func allowsForcedPoll(after error: GitHubError?) -> Bool {
-    true
+    switch error {
+    case nil, .unauthorized, .notFound: true
+    case .rateLimited, .transport, .server, .decoding: false
+    }
   }
 
   public static func failures(after error: GitHubError?, previous: Int) -> Int {

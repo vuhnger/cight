@@ -102,7 +102,9 @@ public enum RunGrouping {
       .compactMap { repo -> RepoGroup? in
         let kept = filter(
           repo.runs, repoId: repo.id, defaultBranch: repo.defaultBranch, viewer: viewer, mode: mode)
-        let latest = latestRuns(kept)
+        let latest = latestRuns(kept).filter {
+          $0.conclusion != "skipped" && isLive($0, in: repo)
+        }
         guard !latest.isEmpty else { return nil }
         let branches = Dictionary(grouping: latest, by: BranchKey.init)
           .map { key, runs in
@@ -119,6 +121,12 @@ public enum RunGrouping {
       .sorted {
         ($0.state.urgency, $1.recency, $0.fullName) < ($1.state.urgency, $0.recency, $1.fullName)
       }
+  }
+
+  private static func isLive(_ run: WorkflowRun, in repo: RepoRuns) -> Bool {
+    guard let live = repo.liveBranches else { return true }
+    return run.branch == repo.defaultBranch || run.headRepository?.id != repo.id
+      || live.contains(run.branch)
   }
 
   private static func displayName(_ key: BranchKey, repoId: Int, run: WorkflowRun) -> String {
