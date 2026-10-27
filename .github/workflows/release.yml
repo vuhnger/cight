@@ -1,0 +1,54 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions: {}
+
+jobs:
+  release:
+    runs-on: macos-26
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - name: Build app
+        run: VERSION="${GITHUB_REF_NAME#v}" scripts/bundle.sh
+      - name: Make dmg
+        run: |
+          mkdir build/dmg
+          cp -R build/Cight.app build/dmg/
+          ln -s /Applications build/dmg/Applications
+          hdiutil create -volname Cight -srcfolder build/dmg -ov -format UDZO "build/Cight-${GITHUB_REF_NAME#v}.dmg"
+      - name: Write appcast
+        env:
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          DMG="build/Cight-$VERSION.dmg"
+          BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' build/Cight.app/Contents/Info.plist)"
+          SIGNATURE="$(printf '%s' "$SPARKLE_ED_PRIVATE_KEY" | .build/artifacts/sparkle/Sparkle/bin/sign_update --ed-key-file - "$DMG")"
+          cat > build/appcast.xml <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+            <channel>
+              <title>Cight</title>
+              <item>
+                <title>$VERSION</title>
+                <sparkle:version>$BUILD</sparkle:version>
+                <sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>
+                <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
+                <enclosure url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/Cight-$VERSION.dmg" $SIGNATURE type="application/octet-stream"/>
+              </item>
+            </channel>
+          </rss>
+          EOF
+          xmllint --noout build/appcast.xml
+      - name: Draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --draft --verify-tag --title "$GITHUB_REF_NAME" --generate-notes "build/Cight-${GITHUB_REF_NAME#v}.dmg" build/appcast.xml
