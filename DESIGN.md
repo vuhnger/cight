@@ -101,7 +101,7 @@ Text uses the system hierarchy: primary for repository and workflow names, secon
 
 ## Layout
 
-The panel is 420px wide, with 10px outer padding and 10px between cards. Its cards start 1pt below the menu bar and 4pt left of the icon, kept 8pt from the screen edges, and the panel and grows to fit its cards up to the screen height minus 16px. Inside a card, rows are indented 26px under the header. A repository header is 22px tall, a branch pill 20px with 8px above it, and a run row 24px, plus 8px when it carries a progress bar. Settings is a single 520px wide window with 20px padding.
+The panel is 420px wide, with 10px outer padding and 10px between cards. Its cards start 1pt below the menu bar and 4pt left of the icon, kept 8pt from the screen edges. The panel grows to fit its cards up to the screen height minus 16px. Inside a card, rows are indented 26px under the header. A repository header is 22px tall, a branch pill 20px with 8px above it, and a run row 24px, plus 8px when it carries a progress bar. Settings is a single 520px wide window with 20px padding.
 
 ## Elevation & Depth
 
