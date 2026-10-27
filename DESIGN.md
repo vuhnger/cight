@@ -61,7 +61,7 @@ Cight is flat and minimal with no decoration. It is dark only: the panel, the se
 
 **Key Characteristics:**
 - Dark only.
-- One regular-glass card per watched repository.
+- One regular-glass card per repository.
 - No header or footer in the panel.
 - Color means state, never decoration.
 
@@ -101,7 +101,7 @@ Text uses the system hierarchy: primary for repository and workflow names, secon
 
 ## Layout
 
-The panel is 420px wide, with 10px outer padding and 10px between cards. It sits 6px below the menu bar icon, kept 8px from the screen edges, and grows to fit its cards up to the screen height minus 16px. Inside a card, rows are indented 26px under the header. A repository header is 22px tall, a branch pill 20px with 8px above it, and a run row 24px, plus 8px when it carries a progress bar. Settings is a 520px wide window with 20px padding and a segmented control for its two panes.
+The panel is 420px wide, with 10px outer padding and 10px between cards. Its cards start 1pt below the menu bar and 4pt left of the icon, kept 8pt from the screen edges, and the panel and grows to fit its cards up to the screen height minus 16px. Inside a card, rows are indented 26px under the header. A repository header is 22px tall, a branch pill 20px with 8px above it, and a run row 24px, plus 8px when it carries a progress bar. Settings is a single 520px wide window with 20px padding.
 
 ## Elevation & Depth
 
@@ -114,7 +114,7 @@ Cards have 22px rounded corners. Branch pills and the progress bar (4px tall) ar
 ## Components
 
 ### Repository card
-A header button with the most urgent state glyph (16px), `owner/name`, the age of the newest run and a chevron. Clicking the header collapses or expands the card. Expanded, it lists each branch pill and its run rows. A missing repository shows one line of secondary text and cannot expand.
+A header button with the most urgent state glyph (16px), `owner/name`, the age of the newest run and a chevron. Cards sort newest first. A card is collapsed unless a run is running or queued, and clicking the header toggles it. Expanded, it lists each branch pill and its run rows. A missing repository shows one line of secondary text and cannot expand.
 
 ### Run row
 State glyph (13px), workflow name, PR number as `#123`, the starter's avatar (16px), the run title and a trailing time. A running row shows elapsed time in amber and remaining time in secondary. Remaining time is prefixed with `~` when fewer than three past runs inform it. Clicking a row opens the run on GitHub and closes the panel.
@@ -129,7 +129,7 @@ The status item is always visible. Each repository with a failed, running, overd
 Passed is a filled check circle, failed a filled cross circle, queued a clock. Running is an amber ring with a pie that fills with estimated progress, or a center dot when there is no estimate. Overdue is a full orange pie.
 
 ### Panel behavior
-The panel opens after the pointer rests 140ms on the menu bar icon and closes 300ms after the pointer leaves both icon and panel. Ctrl+Opt+Cmd+G and a click on the icon toggle it. Escape and a click outside close it.
+The panel opens after the pointer rests 140ms on the menu bar icon and closes 50ms after the pointer leaves both icon and panel. Ctrl+Opt+Cmd+G and a click on the icon toggle it. Escape and a click outside close it.
 
 ### App icon
 A flat green open ring on a solid dark squircle. It has no glass, no shadow, no translucency and no specular highlight.
