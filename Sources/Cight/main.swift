@@ -1,14 +1,48 @@
 import AppKit
 import CightCore
+import OSLog
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+  private let log = Logger(subsystem: "com.vuhnger.cight", category: "startup")
   private let monitor = Monitor()
   private var status: StatusItemController?
   private var panel: PanelController?
   private var settingsWindow: SettingsWindow?
   private var notifier: Notifier?
   private var settingsModel: SettingsModel?
+
+  private func others() -> [NSRunningApplication] {
+    guard let id = Bundle.main.bundleIdentifier else { return [] }
+    let me = ProcessInfo.processInfo.processIdentifier
+    return NSRunningApplication.runningApplications(withBundleIdentifier: id)
+      .filter { $0.processIdentifier != me }
+  }
+
+  func applicationWillFinishLaunching(_ notification: Notification) {
+    let me = ProcessInfo.processInfo.processIdentifier
+    let byLaunchd = LaunchAgent.byLaunchd
+    switch StartupPlan.decide(
+      me: me, others: others().map(\.processIdentifier), byLaunchd: byLaunchd,
+      agentLoaded: !byLaunchd && LaunchAgent.isLoaded())
+    {
+    case .run:
+      LaunchAgent.repairPath()
+    case .kickstart:
+      if LaunchAgent.kickstart() { exit(0) }
+      log.error("Could not kickstart the launch agent, running without it")
+    case .yield:
+      others().first?.activate()
+      exit(0)
+    case .waitForOthers:
+      for _ in 0..<30 where !others().isEmpty { usleep(100_000) }
+      if !others().isEmpty {
+        log.error("Another instance is still running")
+        exit(1)
+      }
+      LaunchAgent.repairPath()
+    }
+  }
 
   func applicationDidFinishLaunching(_ notification: Notification) {
     NSApp.appearance = NSAppearance(named: .darkAqua)
@@ -36,7 +70,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     settingsWindow = window
     monitor.start()
 
-    if monitor.watched.isEmpty { window.show() }
+    if !LaunchAgent.byLaunchd || monitor.watched.isEmpty { window.show() }
   }
 
   func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool)

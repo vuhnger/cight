@@ -6,6 +6,7 @@ import SwiftUI
 final class SettingsWindow: NSObject, NSWindowDelegate {
   private let model: SettingsModel
   private let notifier: Notifier
+  private let launchAtLogin = LaunchAtLogin()
   private var window: NSWindow?
 
   init(model: SettingsModel, notifier: Notifier) {
@@ -15,6 +16,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
   }
 
   func windowDidBecomeKey(_ notification: Notification) {
+    launchAtLogin.refresh()
     Task { await notifier.refreshAuthorization() }
   }
 
@@ -34,7 +36,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     window.isReleasedWhenClosed = false
     window.delegate = self
     let controller = NSHostingController(
-      rootView: SettingsView(model: model, notifier: notifier))
+      rootView: SettingsView(model: model, notifier: notifier, launchAtLogin: launchAtLogin))
     controller.sizingOptions = .preferredContentSize
     window.contentViewController = controller
     window.center()
