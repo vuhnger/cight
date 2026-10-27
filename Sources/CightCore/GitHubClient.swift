@@ -14,8 +14,6 @@ public actor GitHubClient {
   private static let apiHost = "api.github.com"
   private static let timeout: TimeInterval = 15
   private static let pageSize = 100
-  private static let pathSegmentCharacters = CharacterSet(
-    charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-")
 
   private let session: URLSession
   private let tokenProvider: @Sendable () async -> String?
@@ -62,10 +60,7 @@ public actor GitHubClient {
   }
 
   private func segment(_ value: String) throws -> String {
-    let isValid =
-      !value.isEmpty && value != "." && value != ".."
-      && value.unicodeScalars.allSatisfy(Self.pathSegmentCharacters.contains)
-    guard isValid else { throw GitHubError.notFound }
+    guard RepoPath.isValidSegment(value) else { throw GitHubError.notFound }
     return value
   }
 

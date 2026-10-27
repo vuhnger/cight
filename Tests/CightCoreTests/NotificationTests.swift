@@ -101,17 +101,14 @@ struct NotificationTests {
 
   @Test func signedOutNoticeFiresOnlyOnTheTransition() {
     var gate = SignOutGate()
-    #expect(!gate.shouldNotify(signedOut: false))
-    #expect(gate.shouldNotify(signedOut: true))
-    #expect(!gate.shouldNotify(signedOut: true))
-    #expect(!gate.shouldNotify(signedOut: true))
-    #expect(!gate.shouldNotify(signedOut: false))
-    #expect(gate.shouldNotify(signedOut: true))
+    let sequence = [false, true, true, true, false, true]
+    let fired = sequence.map { gate.shouldNotify(signedOut: $0) }
+    #expect(fired == [false, true, false, false, false, true])
   }
 
   @Test func aLaunchWhileSignedOutNotifiesOnce() {
     var gate = SignOutGate()
-    #expect(gate.shouldNotify(signedOut: true))
-    #expect(!gate.shouldNotify(signedOut: true))
+    let fired = [true, true].map { gate.shouldNotify(signedOut: $0) }
+    #expect(fired == [true, false])
   }
 }
