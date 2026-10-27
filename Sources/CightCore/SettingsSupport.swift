@@ -34,8 +34,10 @@ public enum LaunchAgent {
   public static let label = "com.vuhnger.cight.agent"
   public static let plistName = "\(label).plist"
 
-  public static func isStartedByAgent(environment: [String: String]) -> Bool {
-    environment["XPC_SERVICE_NAME"] == label
+  public static let argument = "--launch-agent"
+
+  public static func isStartedByAgent(arguments: [String]) -> Bool {
+    arguments.dropFirst().contains(argument)
   }
 }
 

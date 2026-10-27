@@ -28,8 +28,10 @@ final class SettingsWindow {
     window.title = "Cight Settings"
     window.appearance = NSAppearance(named: .darkAqua)
     window.isReleasedWhenClosed = false
-    window.contentView = NSHostingView(
+    let controller = NSHostingController(
       rootView: SettingsView(model: model, notifier: notifier, launchAtLogin: launchAtLogin))
+    controller.sizingOptions = .preferredContentSize
+    window.contentViewController = controller
     window.center()
     return window
   }

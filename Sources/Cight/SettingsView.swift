@@ -32,7 +32,7 @@ struct SettingsView: View {
       }
     }
     .padding(20)
-    .frame(width: 520, height: 560, alignment: .top)
+    .frame(width: 520, alignment: .top)
     .task { await model.loadRepos() }
   }
 }
@@ -42,6 +42,33 @@ private struct RepositoriesPane: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
+      if model.watched.isEmpty {
+        Text("Nothing is watched yet. Pick a repository below.")
+          .foregroundStyle(.secondary)
+      }
+      VStack(spacing: 0) {
+        ForEach(model.watched, id: \.fullName) { repo in
+          HStack {
+            Text(repo.fullName).lineLimit(1)
+            Spacer()
+            Picker("", selection: filterBinding(for: repo)) {
+              ForEach([BranchFilter.defaultBranch, .mine, .all], id: \.self) {
+                Text($0.title).tag($0)
+              }
+            }
+            .labelsHidden()
+            .frame(width: 190)
+            Button("Remove") { model.remove(repo) }
+          }
+          .padding(.vertical, 6)
+          Divider()
+        }
+      }
+
+      Text("\(model.countText) watched")
+        .foregroundStyle(.secondary).monospacedDigit()
+        .frame(maxWidth: .infinity, alignment: .trailing)
+
       TextField("Search your repositories or type owner/repo", text: $model.query)
         .textFieldStyle(.roundedBorder)
         .onSubmit { submitTyped() }
@@ -72,31 +99,7 @@ private struct RepositoriesPane: View {
           }
         }
       }
-      .frame(height: 170)
-
-      Text("\(model.countText) watched")
-        .foregroundStyle(.secondary).monospacedDigit()
-        .frame(maxWidth: .infinity, alignment: .trailing)
-
-      if model.watched.isEmpty {
-        Text("Nothing is watched yet. Pick a repository above.")
-          .foregroundStyle(.secondary)
-          .frame(maxWidth: .infinity, alignment: .leading)
-      }
-      List(model.watched, id: \.self.fullName) { repo in
-        HStack {
-          Text(repo.fullName).lineLimit(1)
-          Spacer()
-          Picker("", selection: filterBinding(for: repo)) {
-            ForEach([BranchFilter.defaultBranch, .mine, .all], id: \.self) {
-              Text($0.title).tag($0)
-            }
-          }
-          .labelsHidden()
-          .frame(width: 190)
-          Button("Remove") { model.remove(repo) }
-        }
-      }
+      .frame(height: 190)
     }
   }
 
@@ -146,8 +149,6 @@ private struct GeneralPane: View {
       Divider()
 
       Text("Show or hide the panel with Ctrl+Opt+Cmd+G.").foregroundStyle(.secondary)
-
-      Spacer()
 
       Button("Quit Cight") { NSApplication.shared.terminate(nil) }
         .frame(maxWidth: .infinity, alignment: .trailing)
