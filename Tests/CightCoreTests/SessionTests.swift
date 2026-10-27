@@ -64,28 +64,3 @@ struct SessionTests {
     #expect(SessionPolicy.sample(signedOutSignal: false, anySuccess: false) == .unknown)
   }
 }
-
-struct LoginItemTests {
-  @Test func onlyEnabledCountsAsOn() {
-    #expect(LoginItemPresentation(status: .enabled).isOn)
-    #expect(!LoginItemPresentation(status: .requiresApproval).isOn)
-    #expect(!LoginItemPresentation(status: .notRegistered).isOn)
-    #expect(!LoginItemPresentation(status: .notFound).isOn)
-  }
-
-  @Test func approvalOffersTheSystemSettingsButton() {
-    let approval = LoginItemPresentation(status: .requiresApproval)
-    #expect(approval.offersSystemSettings)
-    #expect(approval.message?.contains("Login Items") == true)
-    #expect(!LoginItemPresentation(status: .enabled).offersSystemSettings)
-  }
-
-  @Test func notFoundHasItsOwnMessage() {
-    let missing = LoginItemPresentation(status: .notFound)
-    let approval = LoginItemPresentation(status: .requiresApproval)
-    #expect(missing.message != nil)
-    #expect(missing.message != approval.message)
-    #expect(!missing.offersSystemSettings)
-    #expect(LoginItemPresentation(status: .enabled).message == nil)
-  }
-}

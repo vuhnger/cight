@@ -50,27 +50,3 @@ public struct SignOutGate {
     defaults.set(value, forKey: Self.key)
   }
 }
-
-public enum LoginItemStatus: Sendable, Equatable {
-  case enabled
-  case requiresApproval
-  case notRegistered
-  case notFound
-}
-
-public struct LoginItemPresentation: Sendable, Equatable {
-  public let isOn: Bool
-  public let message: String?
-  public let offersSystemSettings: Bool
-
-  public init(status: LoginItemStatus) {
-    isOn = status == .enabled
-    offersSystemSettings = status == .requiresApproval
-    message =
-      switch status {
-      case .requiresApproval: "Approve Cight under Login Items in System Settings to finish."
-      case .notFound: "Cight cannot find its login item. Reinstall the app."
-      case .enabled, .notRegistered: nil
-      }
-  }
-}
