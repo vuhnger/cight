@@ -4,11 +4,11 @@ import Testing
 @testable import CightCore
 
 private func groups(
-  _ runs: [WorkflowRun], live: Set<String>?, filter: BranchFilter = .all
+  _ runs: [WorkflowRun], live: Set<String>?
 ) -> [RepoGroup] {
   let repo = RepoRuns(
     id: 1, fullName: "o/r", defaultBranch: "main", runs: runs, liveBranches: live)
-  return RunGrouping.groups([repo], viewer: "me", filter: filter)
+  return RunGrouping.groups([repo], viewer: "me")
 }
 
 struct RunVisibilityTests {
@@ -66,10 +66,10 @@ struct RunVisibilityTests {
     #expect(result.first?.branches.map(\.branch) == ["feat/x"])
   }
 
-  @Test func theBranchFilterStillAppliesToLiveBranches() {
+  @Test func otherPeoplesBranchesStayHiddenEvenWhenTheyAreLive() {
     let result = groups(
       [makeRun(id: 1, branch: "main"), makeRun(id: 2, branch: "feat/x", actor: "stranger")],
-      live: ["main", "feat/x"], filter: .defaultBranch)
+      live: ["main", "feat/x"])
     #expect(result.first?.branches.map(\.branch) == ["main"])
   }
 }

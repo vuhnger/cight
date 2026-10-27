@@ -4,11 +4,11 @@ import Testing
 @testable import CightCore
 
 private func notice(
-  gh: Bool = true, token: Bool = true, watched: Int = 2, errors: [GitHubError] = [],
+  gh: Bool = true, token: Bool = true, repos: Int = 2, errors: [GitHubError] = [],
   updated: Date? = at(0)
 ) -> PanelNotice? {
   NoticePolicy.notice(
-    ghInstalled: gh, tokenAvailable: token, watchedCount: watched, errors: errors,
+    ghInstalled: gh, tokenAvailable: token, repoCount: repos, errors: errors,
     lastUpdated: updated)
 }
 
@@ -22,7 +22,7 @@ struct NoticePolicyTests {
   }
 
   @Test func missingGhWinsOverEverything() {
-    #expect(notice(gh: false, token: false, watched: 0, errors: [.unauthorized]) == .ghMissing)
+    #expect(notice(gh: false, token: false, repos: 0, errors: [.unauthorized]) == .ghMissing)
   }
 
   @Test func noTokenOrUnauthorizedMeansSignedOut() {
@@ -30,9 +30,14 @@ struct NoticePolicyTests {
     #expect(notice(errors: [.notFound, .unauthorized, .transport(.timedOut)]) == .signedOut)
   }
 
-  @Test func emptyWatchListIsReportedWhenSignedIn() {
-    #expect(notice(watched: 0) == .nothingWatched)
-    #expect(notice(token: false, watched: 0) == .signedOut)
+  @Test func noRunsInTheWindowIsReportedWhenSignedIn() {
+    #expect(notice(repos: 0) == .noRecentRuns)
+    #expect(notice(token: false, repos: 0) == .signedOut)
+  }
+
+  @Test func aFailedDiscoveryWithNoListShowsTheErrorNotTheEmptyState() {
+    #expect(notice(repos: 0, errors: [.transport(.timedOut)]) == .offline(since: at(0)))
+    #expect(notice(repos: 0, errors: [.server(500)]) == .unavailable(since: at(0)))
   }
 
   @Test func rateLimitUsesTheLatestResumeDate() {

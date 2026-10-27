@@ -13,7 +13,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   private var panel: PanelController?
   private var settingsWindow: SettingsWindow?
   private var notifier: Notifier?
-  private var settingsModel: SettingsModel?
 
   private func others() -> [NSRunningApplication] {
     guard let id = Bundle.main.bundleIdentifier else { return [] }
@@ -58,22 +57,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     self.panel = panel
 
     let notifier = Notifier(defaults: .standard, center: SystemNotificationCenter.make())
-    let model = SettingsModel(monitor: monitor)
     monitor.onEvents = { events in Task { await notifier.deliver(events) } }
-    monitor.onSession = { state in
-      Task {
-        await notifier.observe(state)
-        await model.sessionChanged(state)
-      }
-    }
+    monitor.onSession = { state in Task { await notifier.observe(state) } }
     self.notifier = notifier
-    self.settingsModel = model
 
-    let window = SettingsWindow(model: model, notifier: notifier)
+    let window = SettingsWindow(notifier: notifier)
     settingsWindow = window
     monitor.start()
 
-    if !LaunchAgent.byLaunchd || monitor.watched.isEmpty { window.show() }
+    if !LaunchAgent.byLaunchd { window.show() }
   }
 
   func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool)

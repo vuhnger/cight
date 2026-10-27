@@ -37,7 +37,6 @@ public struct RunTracker: Sendable {
     let attempt: Int?
   }
 
-  private var filter: BranchFilter?
   private var baselinedRepos: Set<String> = []
   private var seen: [Key: Seen] = [:]
   private var lastSettled: [Key: RunState] = [:]
@@ -47,15 +46,7 @@ public struct RunTracker: Sendable {
 
   public init() {}
 
-  public mutating func ingest(
-    repo: String, runs: [WorkflowRun], filter newFilter: BranchFilter
-  ) -> [RunEvent] {
-    if filter != newFilter {
-      baselinedRepos = []
-      seen = [:]
-      lastSettled = [:]
-      filter = newFilter
-    }
+  public mutating func ingest(repo: String, runs: [WorkflowRun]) -> [RunEvent] {
     let isBaseline = baselinedRepos.insert(repo).inserted
     let latest = RunGrouping.latestRuns(runs)
     let present = Set(latest.map(\.id))

@@ -19,6 +19,7 @@ public struct Repo: Decodable, Sendable, Equatable, Identifiable {
   public let name: String
   public let fullName: String
   public let defaultBranch: String
+  public let pushedAt: Date?
 }
 
 public struct Branch: Decodable, Sendable, Equatable {

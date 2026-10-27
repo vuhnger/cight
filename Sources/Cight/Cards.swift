@@ -111,8 +111,8 @@ struct NoticeCard: View {
       Text("GitHub rejected the token. Run gh auth login in Terminal.")
     case .ghMissing:
       Text("The gh command is missing. Install it with brew install gh, then run gh auth login.")
-    case .nothingWatched:
-      Text("No repositories are watched yet.")
+    case .noRecentRuns:
+      Text("No runs from you in the last 7 days.")
     case .rateLimited(let until):
       Text(
         "GitHub rate limit reached. Checking again at \(until.formatted(date: .omitted, time: .shortened))."

@@ -91,7 +91,6 @@ struct GitHubClientTests {
   func rejectsOwnersAndNamesThatCannotBePathSegments(owner: String, name: String) async {
     let (client, _) = makeClient { _ in ok("runs") }
     await #expect(throws: GitHubError.notFound) { try await client.runs(owner: owner, name: name) }
-    await #expect(throws: GitHubError.notFound) { try await client.repo(owner: owner, name: name) }
     #expect(StubProtocol.requests.isEmpty)
   }
 
@@ -143,25 +142,43 @@ struct GitHubClientTests {
     #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer tok")
   }
 
-  @Test func requestsTheFourEndpoints() async throws {
+  @Test func theActorQueryAsksForOneRunSinceTheCutoffDay() async throws {
+    let (client, _) = makeClient { _ in ok("actor-runs") }
+    let run = try await client.latestRun(
+      owner: "vuhnger", name: "cight", actor: "vuhnger",
+      since: Date(timeIntervalSince1970: 1_792_540_800 + 3_600))
+    #expect(run?.id == 40_589_748_693)
+    #expect(
+      StubProtocol.requests.first?.url?.absoluteString
+        == "https://api.github.com/repos/vuhnger/cight/actions/runs"
+        + "?actor=vuhnger&created=%3E%3D2026-10-21&per_page=1")
+  }
+
+  @Test func anEmptyActorQueryMeansNoRun() async throws {
+    let (client, _) = makeClient { _ in
+      StubReply(status: 200, body: Data("{\"total_count\":0,\"workflow_runs\":[]}".utf8))
+    }
+    let run = try await client.latestRun(owner: "o", name: "r", actor: "me", since: t0)
+    #expect(run == nil)
+  }
+
+  @Test func requestsTheThreeEndpoints() async throws {
     let (client, _) = makeClient { request in
       switch request.url?.path {
       case "/user": ok("user")
       case "/user/repos": ok("repos")
-      case "/repos/swiftlang/swift-format": ok("repo")
       default: ok("runs")
       }
     }
     #expect(try await client.viewer().login == "octocat")
     #expect(try await client.repos().count == 3)
-    #expect(try await client.repo(owner: "swiftlang", name: "swift-format").id == 196_084_046)
     #expect(try await client.runs(owner: "swiftlang", name: "swift-format").count == 10)
     let urls = StubProtocol.requests.compactMap { $0.url?.absoluteString }
     #expect(
       urls == [
         "https://api.github.com/user",
-        "https://api.github.com/user/repos?sort=pushed&per_page=100",
-        "https://api.github.com/repos/swiftlang/swift-format",
+        "https://api.github.com/user/repos?sort=pushed&direction=desc&per_page=30"
+          + "&affiliation=owner,collaborator,organization_member",
         "https://api.github.com/repos/swiftlang/swift-format/actions/runs?per_page=100",
       ])
   }
@@ -255,7 +272,7 @@ struct GitHubClientTests {
   @Test func mapsNotFound() async {
     let (client, _) = makeClient { _ in StubReply(status: 404) }
     await #expect(throws: GitHubError.notFound) {
-      try await client.repo(owner: "o", name: "gone")
+      try await client.runs(owner: "o", name: "gone")
     }
   }
 
