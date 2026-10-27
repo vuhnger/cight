@@ -39,6 +39,7 @@ final class PanelController: NSObject {
   private var outsideClicks: Any?
   private var pointerMonitor: Any?
   private var pointerTimer: Timer?
+  private var samplingFast = false
   private var lastPointer: (icon: Bool, panel: Bool)?
   private var trigger: (name: String, start: CFTimeInterval)?
   private var interval: OSSignpostIntervalState?
@@ -52,7 +53,8 @@ final class PanelController: NSObject {
       styleMask: [.nonactivatingPanel, .borderless], backing: .buffered, defer: false)
     super.init()
     let hosting = NSHostingView(
-      rootView: PanelRoot(monitor: monitor, open: { [weak self] url in self?.openRun(url) }))
+      rootView: PanelRoot(monitor: monitor, open: { [weak self] url in self?.openRun(url) })
+        .environment(\.controlActiveState, .key))
     hosting.sizingOptions = []
     panel.contentView = hosting
     panel.isFloatingPanel = true
@@ -67,7 +69,12 @@ final class PanelController: NSObject {
     track({ Metrics.height(of: monitor) }, apply: { [weak self] _ in self?.resize() })
     warmUp()
     watchPointer()
+    setSampling(fast: false)
     registerHotKey()
+  }
+
+  func pointerMayHaveMoved() {
+    samplePointer()
   }
 
   func iconClicked() {
@@ -205,19 +212,20 @@ final class PanelController: NSObject {
     let overIcon = icon.map { Self.contains($0, location) } ?? false
     let overPanel = panel.isVisible && Self.contains(panel.frame, location)
     let near = icon.map { Self.contains($0.insetBy(dx: -80, dy: -60), location) } ?? false
-    let wantsTimer = near || panel.isVisible || machine.phase != .hidden
-    if wantsTimer, pointerTimer == nil {
-      pointerTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) {
-        [weak self] _ in
-        MainActor.assumeIsolated { self?.samplePointer() }
-      }
-    } else if !wantsTimer {
-      pointerTimer?.invalidate()
-      pointerTimer = nil
-    }
+    setSampling(fast: near || panel.isVisible || machine.phase != .hidden)
     guard lastPointer?.icon != overIcon || lastPointer?.panel != overPanel else { return }
     lastPointer = (overIcon, overPanel)
     send(.pointer(overIcon: overIcon, overPanel: overPanel))
+  }
+
+  private func setSampling(fast: Bool) {
+    guard fast != samplingFast || pointerTimer == nil else { return }
+    samplingFast = fast
+    pointerTimer?.invalidate()
+    pointerTimer = Timer.scheduledTimer(withTimeInterval: fast ? 1.0 / 30 : 0.2, repeats: true) {
+      [weak self] _ in
+      MainActor.assumeIsolated { self?.samplePointer() }
+    }
   }
 
   private static func contains(_ rect: NSRect, _ point: NSPoint) -> Bool {

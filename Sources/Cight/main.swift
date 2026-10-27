@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let status = StatusItemController()
     let panel = PanelController(monitor: monitor, anchor: { [weak status] in status?.frame })
     status.onClick = { [weak panel] in panel?.iconClicked() }
+    status.onPointer = { [weak panel] in panel?.pointerMayHaveMoved() }
     track({ [monitor] in monitor.glyphs }, apply: { [weak status] in status?.update($0) })
     self.status = status
     self.panel = panel

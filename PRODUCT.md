@@ -1,5 +1,3 @@
-# Product
-
 **Users**
 Developers working in VS Code or in Claude Code in the terminal. They avoid the slow browser and want a menu bar signal only when they must act.
 
