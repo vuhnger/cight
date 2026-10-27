@@ -1,5 +1,6 @@
 import AppKit
 import CightCore
+import OSLog
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -11,8 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   private var notifier: Notifier?
   private var settingsModel: SettingsModel?
   private var lock: InstanceLock?
-  private var tookOverFromPlainInstance = false
-  private var quitObserver: (any NSObjectProtocol)?
+  private let log = Logger(subsystem: "com.vuhnger.cight", category: "startup")
 
   private var startedByAgent: Bool { LaunchAgent.isStartedByAgent(arguments: arguments) }
 
@@ -21,33 +21,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   }
 
   func applicationWillFinishLaunching(_ notification: Notification) {
-    let first = InstanceLock.acquire(at: Self.lockURL)
+    let waits = LaunchAgent.waitsForLock(arguments: arguments)
+    let plain = !startedByAgent && !waits
+    let attempt = InstanceLock.acquire(at: Self.lockURL)
+    if plain { LaunchAtLogin.reregisterIfStale(defaults: .standard) }
     switch StartupPlan.decide(
-      lockAcquired: first != nil, startedByAgent: startedByAgent,
-      waitsForLock: LaunchAgent.waitsForLock(arguments: arguments))
+      lock: attempt.outcome, startedByAgent: startedByAgent, waitsForLock: waits,
+      agentEnabled: plain && LaunchAtLogin.agentEnabled())
     {
     case .run:
-      lock = first
-    case .exit:
-      exit(0)
-    case .takeOver(let askHolderToQuit):
-      lock = waitForLock(askingHolder: askHolderToQuit)
-      guard lock != nil else { exit(0) }
-      tookOverFromPlainInstance = askHolderToQuit
-    }
-  }
-
-  private func waitForLock(askingHolder: Bool) -> InstanceLock? {
-    let attempts = Int(HandoverPolicy.takeOverTimeout)
-    for _ in 0..<attempts {
-      if askingHolder {
-        DistributedNotificationCenter.default().postNotificationName(
-          Notification.Name(HandoverPolicy.quitRequest), object: nil, userInfo: nil,
-          deliverImmediately: true)
+      lock = attempt.lock
+    case .waitForLock:
+      lock = InstanceLock.acquire(at: Self.lockURL, timeout: StartupPlan.waitTimeout).lock
+      if lock == nil {
+        log.error("Gave up waiting for the instance lock")
+        exit(1)
       }
-      if let acquired = InstanceLock.acquire(at: Self.lockURL, timeout: 1) { return acquired }
+    case .kickstartThenExit:
+      if LaunchAtLogin.kickstart() { exit(0) }
+      log.error("Could not start the launch agent")
+      guard let fallback = attempt.lock else { exit(0) }
+      lock = fallback
+    case .exitQuietly:
+      exit(0)
+    case .exitFailure:
+      log.error("Could not open the instance lock file")
+      exit(1)
     }
-    return nil
   }
 
   func applicationDidFinishLaunching(_ notification: Notification) {
@@ -63,14 +63,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let notifier = Notifier(defaults: .standard, center: SystemNotificationCenter.make())
     let model = SettingsModel(monitor: monitor)
     monitor.onEvents = { events in Task { await notifier.deliver(events) } }
-    track(
-      { [monitor] in monitor.session },
-      apply: { state in
-        Task {
-          await notifier.observe(state)
-          await model.sessionChanged(state)
-        }
-      })
+    monitor.onSession = { state in
+      Task {
+        await notifier.observe(state)
+        await model.sessionChanged(state)
+      }
+    }
     self.notifier = notifier
     self.settingsModel = model
 
@@ -78,17 +76,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     settingsWindow = window
     monitor.start()
 
-    quitObserver = DistributedNotificationCenter.default().addObserver(
-      forName: Notification.Name(HandoverPolicy.quitRequest), object: nil, queue: .main
-    ) { [startedByAgent] _ in
-      if HandoverPolicy.holderShouldYield(startedByAgent: startedByAgent) {
-        MainActor.assumeIsolated { NSApp.terminate(nil) }
-      }
-    }
-
-    if tookOverFromPlainInstance
-      || SettingsLaunchPolicy.shouldOpen(
-        startedByLaunchAgent: startedByAgent, watchedCount: monitor.watched.count)
+    if SettingsLaunchPolicy.shouldOpen(
+      startedByLaunchAgent: startedByAgent, watchedCount: monitor.watched.count)
     {
       window.show()
     }

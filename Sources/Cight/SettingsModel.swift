@@ -62,6 +62,7 @@ final class SettingsModel {
   }
 
   func sessionChanged(_ next: SessionState) async {
+    guard next != .unknown else { return }
     let previous = session
     session = next
     if next == .signedIn, previous == .signedOut {

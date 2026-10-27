@@ -26,8 +26,8 @@ final class Monitor {
   private(set) var repos: [RepoModel] = []
   private(set) var notice: PanelNotice?
   private(set) var glyphs: [MenuBarGlyph] = []
-  private(set) var session = SessionState.unknown
   var onEvents: (([RunEvent]) -> Void)?
+  var onSession: ((SessionState) -> Void)?
 
   @ObservationIgnored private var watchList: WatchList
   @ObservationIgnored let client: GitHubClient
@@ -305,10 +305,10 @@ final class Monitor {
       signedOut: unauthorized || newNotice == .ghMissing,
       now: now)
     if newGlyphs != glyphs { glyphs = newGlyphs }
-    let nextSession = SessionPolicy.next(
-      current: session, signedOutSignal: unauthorized || newNotice == .ghMissing,
-      anySuccess: outcomes.contains { if case .success = $0.result { true } else { false } })
-    if nextSession != session { session = nextSession }
+    onSession?(
+      SessionPolicy.sample(
+        signedOutSignal: unauthorized || newNotice == .ghMissing,
+        anySuccess: outcomes.contains { if case .success = $0.result { true } else { false } }))
     hasActiveRun = menuInputs.values.contains {
       $0.visible.contains { $0.state == .running || $0.state == .queued }
     }

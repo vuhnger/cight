@@ -7,31 +7,47 @@ public enum SessionState: Sendable, Equatable {
 }
 
 public enum SessionPolicy {
-  public static func next(
-    current: SessionState, signedOutSignal: Bool, anySuccess: Bool
-  ) -> SessionState {
+  public static func sample(signedOutSignal: Bool, anySuccess: Bool) -> SessionState {
     if signedOutSignal { return .signedOut }
-    if anySuccess { return .signedIn }
-    return current
+    return anySuccess ? .signedIn : .unknown
   }
 }
 
-public struct SignOutGate: Sendable {
-  private var notified = false
+public struct SignOutGate {
+  private static let key = "signOutNotified"
+  private static let required = 2
 
-  public init() {}
+  private let defaults: UserDefaults
+  private var consecutive = 0
+  private var notified: Bool
+
+  public init(defaults: UserDefaults) {
+    self.defaults = defaults
+    notified = defaults.bool(forKey: Self.key)
+  }
 
   public mutating func shouldNotify(_ state: SessionState) -> Bool {
     switch state {
     case .signedIn:
-      notified = false
+      consecutive = 0
+      setNotified(false)
       return false
     case .unknown:
       return false
     case .signedOut:
-      defer { notified = true }
-      return !notified
+      consecutive += 1
+      return consecutive >= Self.required && !notified
     }
+  }
+
+  public mutating func didPost() {
+    setNotified(true)
+  }
+
+  private mutating func setNotified(_ value: Bool) {
+    guard notified != value else { return }
+    notified = value
+    defaults.set(value, forKey: Self.key)
   }
 }
 

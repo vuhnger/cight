@@ -78,11 +78,12 @@ final class Notifier {
 
   @ObservationIgnored private let defaults: UserDefaults
   @ObservationIgnored private let center: (any NotificationCentering)?
-  @ObservationIgnored private var signOutGate = SignOutGate()
+  @ObservationIgnored private var signOutGate: SignOutGate
 
   init(defaults: UserDefaults, center: (any NotificationCentering)?) {
     self.defaults = defaults
     self.center = center
+    signOutGate = SignOutGate(defaults: defaults)
     settings = NotificationSettings.load(from: defaults)
     Task { await refreshAuthorization() }
   }
@@ -99,14 +100,14 @@ final class Notifier {
   func deliver(_ events: [RunEvent]) async {
     for event in events {
       if let content = NotificationContent.make(for: event, settings: settings) {
-        await post(content, mayPrompt: true)
+        _ = await post(content, mayPrompt: true)
       }
     }
   }
 
   func observe(_ state: SessionState) async {
-    if signOutGate.shouldNotify(state) {
-      await post(.signedOut, mayPrompt: false)
+    if signOutGate.shouldNotify(state), await post(.signedOut, mayPrompt: false) {
+      signOutGate.didPost()
     }
   }
 
@@ -118,14 +119,15 @@ final class Notifier {
     await refreshAuthorization()
   }
 
-  private func post(_ content: NotificationContent, mayPrompt: Bool) async {
-    guard let center else { return }
+  private func post(_ content: NotificationContent, mayPrompt: Bool) async -> Bool {
+    guard let center else { return false }
     if mayPrompt {
       await requestAuthorizationIfNeeded()
     } else {
       await refreshAuthorization()
     }
-    guard isAllowed else { return }
+    guard isAllowed else { return false }
     await center.add(content)
+    return true
   }
 }

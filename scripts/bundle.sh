@@ -4,6 +4,7 @@ cd "$(dirname "$0")/.."
 swift build -c release
 BIN="$(swift build -c release --show-bin-path)/Cight"
 APP=build/Cight.app
+BUILD="$(git rev-list --count HEAD)"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Library/LaunchAgents"
 cp "$BIN" "$APP/Contents/MacOS/Cight"
@@ -18,7 +19,7 @@ cat > "$APP/Contents/Info.plist" <<EOF
     <key>CFBundleName</key><string>Cight</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>0.1.0</string>
-    <key>CFBundleVersion</key><string>1</string>
+    <key>CFBundleVersion</key><string>$BUILD</string>
     <key>LSMinimumSystemVersion</key><string>26.0</string>
     <key>LSUIElement</key><true/>
 </dict>

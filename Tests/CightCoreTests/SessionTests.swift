@@ -53,23 +53,15 @@ struct SessionTests {
   }
 
   @Test func unauthorizedBeatsSuccessfulRepos() {
-    #expect(
-      SessionPolicy.next(current: .signedIn, signedOutSignal: true, anySuccess: true)
-        == .signedOut)
+    #expect(SessionPolicy.sample(signedOutSignal: true, anySuccess: true) == .signedOut)
   }
 
   @Test func successSignsIn() {
-    #expect(
-      SessionPolicy.next(current: .signedOut, signedOutSignal: false, anySuccess: true)
-        == .signedIn)
+    #expect(SessionPolicy.sample(signedOutSignal: false, anySuccess: true) == .signedIn)
   }
 
-  @Test func offlineOrRateLimitedKeepsTheCurrentState() {
-    for current in [SessionState.unknown, .signedIn, .signedOut] {
-      #expect(
-        SessionPolicy.next(current: current, signedOutSignal: false, anySuccess: false)
-          == current)
-    }
+  @Test func offlineOrRateLimitedSaysNothing() {
+    #expect(SessionPolicy.sample(signedOutSignal: false, anySuccess: false) == .unknown)
   }
 }
 
