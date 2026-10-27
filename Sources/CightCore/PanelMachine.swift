@@ -38,7 +38,7 @@ public enum PanelEffect: Sendable, Equatable {
 
 public struct PanelMachine: Sendable {
   public static let dwell: TimeInterval = 0.14
-  public static let grace: TimeInterval = 0.3
+  public static let grace: TimeInterval = 0.05
 
   public private(set) var phase = PanelPhase.hidden
   private var token = 0
