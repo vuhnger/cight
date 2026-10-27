@@ -1,8 +1,6 @@
 #!/bin/bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-VERSION="${VERSION:-0.1.0}"
-BUILD="${BUILD:-1}"
 swift build -c release
 BIN="$(swift build -c release --show-bin-path)/Cight"
 APP=build/Cight.app
@@ -18,8 +16,8 @@ cat > "$APP/Contents/Info.plist" <<EOF
     <key>CFBundleIdentifier</key><string>com.vuhnger.cight</string>
     <key>CFBundleName</key><string>Cight</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>$VERSION</string>
-    <key>CFBundleVersion</key><string>$BUILD</string>
+    <key>CFBundleShortVersionString</key><string>0.1.0</string>
+    <key>CFBundleVersion</key><string>1</string>
     <key>LSMinimumSystemVersion</key><string>26.0</string>
     <key>LSUIElement</key><true/>
 </dict>

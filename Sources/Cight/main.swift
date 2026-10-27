@@ -1,5 +1,4 @@
 import AppKit
-import CightCore
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -8,11 +7,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   func applicationDidFinishLaunching(_ notification: Notification) {
     let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     item.button?.image = NSImage(
-      systemSymbolName: "checkmark.circle", accessibilityDescription: AppInfo.name)
+      systemSymbolName: "checkmark.circle", accessibilityDescription: "Cight")
     let menu = NSMenu()
     menu.addItem(
       NSMenuItem(
-        title: "Quit \(AppInfo.name)", action: #selector(NSApplication.terminate(_:)),
+        title: "Quit Cight", action: #selector(NSApplication.terminate(_:)),
         keyEquivalent: "q"))
     item.menu = menu
     statusItem = item
