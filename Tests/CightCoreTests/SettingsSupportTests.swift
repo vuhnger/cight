@@ -61,13 +61,11 @@ struct LaunchPolicyTests {
     #expect(SettingsLaunchPolicy.shouldOpen(startedByLaunchAgent: true, watchedCount: 0))
   }
 
-  @Test func recognisesAnAgentStartByTheLaunchdServiceName() {
-    #expect(LaunchAgent.isStartedByAgent(environment: ["XPC_SERVICE_NAME": LaunchAgent.label]))
-    #expect(
-      !LaunchAgent.isStartedByAgent(environment: [
-        "XPC_SERVICE_NAME": "application.com.vuhnger.cight.123"
-      ]))
-    #expect(!LaunchAgent.isStartedByAgent(environment: [:]))
+  @Test func recognisesAnAgentStartByItsLaunchArgument() {
+    #expect(LaunchAgent.isStartedByAgent(arguments: ["/path/Cight", LaunchAgent.argument]))
+    #expect(!LaunchAgent.isStartedByAgent(arguments: ["/path/Cight"]))
+    #expect(!LaunchAgent.isStartedByAgent(arguments: []))
+    #expect(!LaunchAgent.isStartedByAgent(arguments: ["/path/Cight", "--other"]))
   }
 }
 
@@ -85,6 +83,8 @@ struct LaunchAgentPlistTests {
     let plist = try load()
     #expect(plist["Label"] as? String == LaunchAgent.label)
     #expect(plist["BundleProgram"] as? String == "Contents/MacOS/Cight")
+    #expect(
+      plist["ProgramArguments"] as? [String] == ["Contents/MacOS/Cight", LaunchAgent.argument])
     #expect(plist["RunAtLoad"] as? Bool == true)
     #expect(plist["AssociatedBundleIdentifiers"] as? [String] == ["com.vuhnger.cight"])
   }
