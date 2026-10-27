@@ -74,11 +74,9 @@ private struct RepositoriesPane: View {
       }
       .frame(height: 170)
 
-      HStack {
-        Text("Watched").fontWeight(.semibold)
-        Spacer()
-        Text(model.countText).foregroundStyle(.secondary).monospacedDigit()
-      }
+      Text("\(model.countText) watched")
+        .foregroundStyle(.secondary).monospacedDigit()
+        .frame(maxWidth: .infinity, alignment: .trailing)
 
       if model.watched.isEmpty {
         Text("Nothing is watched yet. Pick a repository above.")
