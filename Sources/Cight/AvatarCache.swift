@@ -4,7 +4,12 @@ import SwiftUI
 enum AvatarCache {
   private static let host = "avatars.githubusercontent.com"
   private static let pixels = 48
-  nonisolated(unsafe) private static let images = NSCache<NSURL, CGImage>()
+  private static let countLimit = 200
+  nonisolated(unsafe) private static let images: NSCache<NSURL, CGImage> = {
+    let cache = NSCache<NSURL, CGImage>()
+    cache.countLimit = countLimit
+    return cache
+  }()
   private static let session = URLSession(configuration: .ephemeral)
 
   static func url(_ string: String?) -> URL? {
@@ -19,6 +24,10 @@ enum AvatarCache {
 
   static func load(_ url: URL) async -> CGImage? {
     if let image = cached(url) { return image }
+    return await AvatarLoader.shared.image(for: url)
+  }
+
+  fileprivate static func download(_ url: URL) async -> CGImage? {
     guard let (data, response) = try? await session.data(from: url),
       (response as? HTTPURLResponse)?.statusCode == 200,
       let source = CGImageSourceCreateWithData(data as CFData, nil),
@@ -31,6 +40,28 @@ enum AvatarCache {
         ] as CFDictionary)
     else { return nil }
     images.setObject(image, forKey: url as NSURL)
+    return image
+  }
+}
+
+actor AvatarLoader {
+  static let shared = AvatarLoader()
+  private static let retryAfter: TimeInterval = 300
+
+  private var inFlight: [URL: Task<CGImage?, Never>] = [:]
+  private var failed: [URL: Date] = [:]
+
+  func image(for url: URL) async -> CGImage? {
+    if let image = AvatarCache.cached(url) { return image }
+    if let failedAt = failed[url], Date().timeIntervalSince(failedAt) < Self.retryAfter {
+      return nil
+    }
+    if let running = inFlight[url] { return await running.value }
+    let task = Task { await AvatarCache.download(url) }
+    inFlight[url] = task
+    let image = await task.value
+    inFlight[url] = nil
+    failed[url] = image == nil ? Date() : nil
     return image
   }
 }

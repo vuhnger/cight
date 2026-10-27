@@ -18,7 +18,7 @@ final class StatusItemController: NSObject {
     item.isVisible = false
     item.button?.target = self
     item.button?.action = #selector(clicked)
-    item.button?.sendAction(on: [.leftMouseDown])
+    item.button?.sendAction(on: [.leftMouseDown, .rightMouseDown])
     item.button?.addTrackingArea(
       NSTrackingArea(
         rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
@@ -32,12 +32,12 @@ final class StatusItemController: NSObject {
       item.isVisible = false
       return
     }
+    item.isVisible = true
     let renderer = ImageRenderer(content: MenuBarStrip(glyphs: glyphs))
-    renderer.scale = NSScreen.main?.backingScaleFactor ?? 2
+    renderer.scale = item.button?.window?.backingScaleFactor ?? 2
     let image = renderer.nsImage
     image?.isTemplate = false
     item.button?.image = image
-    item.isVisible = true
   }
 
   @objc func mouseEntered(with event: NSEvent) {

@@ -2,8 +2,15 @@ import AppKit
 import CightCore
 import Observation
 
+private struct RepoMeta: Sendable {
+  let repo: Repo
+  let branches: Set<String>?
+  let fetchedAt: Date
+}
+
 private struct Fetched: Sendable {
   let id: String
+  let meta: RepoMeta
   let group: RepoGroup?
   let rawRuns: [WorkflowRun]
   let etas: [Int: ETAEstimate]
@@ -24,6 +31,10 @@ final class Monitor {
   @ObservationIgnored private var watchList: WatchList
   @ObservationIgnored private let client: GitHubClient
   @ObservationIgnored private var viewer: String?
+  @ObservationIgnored private var metas: [String: RepoMeta] = [:]
+  @ObservationIgnored private var ghInstalled = true
+  @ObservationIgnored private var lastError: GitHubError?
+  @ObservationIgnored private var pollTask: Task<Void, Never>?
   @ObservationIgnored private var rows: [Int: RunRowModel] = [:]
   @ObservationIgnored private var models: [String: RepoModel] = [:]
   @ObservationIgnored private var menuInputs: [String: MenuBarRepo] = [:]
@@ -61,6 +72,7 @@ final class Monitor {
     ) { [weak self] _ in
       MainActor.assumeIsolated {
         self?.woke = true
+        self?.pollTask?.cancel()
         self?.nudge()
       }
     }
@@ -110,57 +122,77 @@ final class Monitor {
   private func run() async {
     while !Task.isCancelled {
       lastPollStart = Date()
-      let error = await poll()
+      let task = Task { await poll() }
+      pollTask = task
+      await task.value
       let finished = Date()
+      let error = lastError
       let jitter = Double.random(in: 0...1)
       while !Task.isCancelled {
         let delay = PollPolicy.delay(
           after: error, failures: failures, panelVisible: panelVisible,
-          hasActiveRun: hasActiveRun, wokeFromSleep: woke, now: Date(), jitter: jitter)
+          hasActiveRun: hasActiveRun, wokeFromSleep: woke, now: finished, jitter: jitter)
         let remaining = finished.addingTimeInterval(delay).timeIntervalSinceNow
-        if remaining <= 0 || forced { break }
+        if remaining <= 0 || (forced && PollPolicy.allowsForcedPoll(after: error)) { break }
         let sleep = Task<Void, Never> { _ = try? await Task.sleep(for: .seconds(remaining)) }
         sleeper = sleep
         await sleep.value
       }
+      if woke { await NetworkGate.waitUntilSatisfied(timeout: .seconds(2)) }
       woke = false
       forced = false
     }
   }
 
-  private func poll() async -> GitHubError? {
+  private func poll() async {
     let list = watchList.repos
     guard !list.isEmpty else {
+      lastError = nil
       apply(outcomes: [], errors: [])
-      return nil
+      return
     }
     let outcomes: [Outcome]
     do {
       let login = try await viewerLogin()
+      let known = metas
+      let now = Date()
       outcomes = await withTaskGroup(of: Outcome.self) { [client] group in
         for watched in list {
-          group.addTask { await Self.fetch(client: client, watched: watched, viewer: login) }
+          let id = "\(watched.owner)/\(watched.name)".lowercased()
+          group.addTask {
+            await Self.fetch(
+              client: client, watched: watched, viewer: login, cached: known[id], now: now)
+          }
         }
         var all: [Outcome] = []
         for await outcome in group { all.append(outcome) }
         return all
       }
     } catch {
+      guard !(error is CancellationError), !Task.isCancelled else { return }
       let failure = error as? GitHubError ?? .transport(.unknown)
-      failures = PollPolicy.failures(after: failure, previous: failures)
-      apply(outcomes: [], errors: [failure])
-      return failure
+      await finish(outcomes: [], errors: [failure])
+      return
     }
+    guard !Task.isCancelled else { return }
     let errors = outcomes.compactMap { outcome -> GitHubError? in
       if case .failure(let error) = outcome.result { error } else { nil }
     }
+    await finish(outcomes: outcomes, errors: errors)
+  }
+
+  private func finish(outcomes: [Outcome], errors: [GitHubError]) async {
     let primary =
       errors.first { $0 == .unauthorized }
       ?? errors.first { if case .rateLimited = $0 { true } else { false } }
       ?? errors.first { $0 != .notFound }
+    if primary == .unauthorized {
+      viewer = nil
+      ghInstalled = await Task.detached { GhTokenReader.isInstalled() }.value
+    }
     failures = PollPolicy.failures(after: primary, previous: failures)
+    lastError = primary
     apply(outcomes: outcomes, errors: errors)
-    return primary
   }
 
   private func viewerLogin() async throws -> String {
@@ -170,16 +202,26 @@ final class Monitor {
     return login
   }
 
+  private nonisolated static let metaLifetime: TimeInterval = 300
+
   private nonisolated static func fetch(
-    client: GitHubClient, watched: WatchedRepo, viewer: String
+    client: GitHubClient, watched: WatchedRepo, viewer: String, cached: RepoMeta?, now: Date
   ) async -> Outcome {
     do {
-      let repo = try await client.repo(owner: watched.owner, name: watched.name)
+      let meta: RepoMeta
+      if let cached, now.timeIntervalSince(cached.fetchedAt) < metaLifetime {
+        meta = cached
+      } else {
+        let repo = try await client.repo(owner: watched.owner, name: watched.name)
+        let branches = try? await client.branches(owner: watched.owner, name: watched.name)
+        meta = RepoMeta(repo: repo, branches: branches ?? cached?.branches, fetchedAt: now)
+      }
       let runs = try await client.runs(owner: watched.owner, name: watched.name)
       let group = RunGrouping.groups(
         [
           RepoRuns(
-            id: repo.id, fullName: repo.fullName, defaultBranch: repo.defaultBranch, runs: runs)
+            id: meta.repo.id, fullName: meta.repo.fullName,
+            defaultBranch: meta.repo.defaultBranch, runs: runs, liveBranches: meta.branches)
         ],
         viewer: viewer, filter: watched.filter
       ).first
@@ -188,8 +230,8 @@ final class Monitor {
         etas[run.id] = ETA.estimate(for: run, among: runs)
       }
       let fetched = Fetched(
-        id: "\(watched.owner)/\(watched.name)".lowercased(), group: group, rawRuns: runs,
-        etas: etas)
+        id: "\(watched.owner)/\(watched.name)".lowercased(), meta: meta, group: group,
+        rawRuns: runs, etas: etas)
       return Outcome(watched: watched, result: .success(fetched))
     } catch let error as GitHubError {
       return Outcome(watched: watched, result: .failure(error))
@@ -221,6 +263,7 @@ final class Monitor {
       switch outcome.result {
       case .success(let fetched):
         if model.problem != nil { model.problem = nil }
+        metas[id] = fetched.meta
         let visible = fetched.group?.branches.flatMap(\.runs) ?? []
         live.formUnion(visible.map(\.id))
         apply(fetched, to: model)
@@ -230,6 +273,7 @@ final class Monitor {
         trackers[id] = tracker
       case .failure(.notFound):
         model.problem = .gone
+        metas[id] = nil
         model.branches = []
         model.glyph = nil
         model.newest = nil
@@ -244,12 +288,13 @@ final class Monitor {
     if newOrder.map(\.id) != repos.map(\.id) { repos = newOrder }
     let ids = Set(list.map { "\($0.owner)/\($0.name)".lowercased() })
     models = models.filter { ids.contains($0.key) }
+    metas = metas.filter { ids.contains($0.key) }
     menuInputs = menuInputs.filter { ids.contains($0.key) }
     rows = rows.filter { live.contains($0.key) }
 
     let unauthorized = errors.contains(.unauthorized)
     let newNotice = NoticePolicy.notice(
-      ghInstalled: GhTokenReader.defaultPaths.contains(where: FileManager.default.isExecutableFile),
+      ghInstalled: ghInstalled,
       tokenAvailable: true, watchedCount: list.count, errors: errors, lastUpdated: lastUpdated)
     if newNotice != notice { notice = newNotice }
     let newGlyphs = MenuBarGlyphs.glyphs(

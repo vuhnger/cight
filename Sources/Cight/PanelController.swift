@@ -37,10 +37,7 @@ final class PanelController: NSObject {
   private var machine = PanelMachine()
   private var timer: Task<Void, Never>?
   private var outsideClicks: Any?
-  private var pointerMonitor: Any?
-  private var pointerTimer: Timer?
-  private var samplingFast = false
-  private var lastPointer: (icon: Bool, panel: Bool)?
+  private var pointerMonitors: [Any] = []
   private var trigger: (name: String, start: CFTimeInterval)?
   private var interval: OSSignpostIntervalState?
   private var hotKey: EventHotKeyRef?
@@ -69,7 +66,6 @@ final class PanelController: NSObject {
     track({ Metrics.height(of: monitor) }, apply: { [weak self] _ in self?.resize() })
     warmUp()
     watchPointer()
-    setSampling(fast: false)
     registerHotKey()
   }
 
@@ -93,10 +89,13 @@ final class PanelController: NSObject {
   }
 
   private func send(_ input: PanelInput) {
-    if case .timer = input, machine.phase == .opening { trigger = ("hover", CACurrentMediaTime()) }
+    if case .timer = input {
+      samplePointer()
+      if machine.phase == .opening { trigger = ("hover", CACurrentMediaTime()) }
+    }
     for effect in machine.handle(input) {
       switch effect {
-      case .show(let pinned): show(pinned: pinned)
+      case .show: show()
       case .hide: hide()
       case .cancelTimer: timer?.cancel()
       case .schedule(let scheduled):
@@ -120,7 +119,7 @@ final class PanelController: NSObject {
     panel.alphaValue = 1
   }
 
-  private func show(pinned: Bool) {
+  private func show() {
     if !panel.isVisible {
       resize()
       position()
@@ -130,7 +129,7 @@ final class PanelController: NSObject {
       monitor.panelVisibilityChanged(true)
       measureFirstFrame()
     }
-    if pinned { panel.makeKey() }
+    panel.makeKey()
   }
 
   private func hide() {
@@ -180,16 +179,21 @@ final class PanelController: NSObject {
   }
 
   private func position() {
-    let screen =
-      anchor().flatMap { icon in
-        NSScreen.screens.first { $0.frame.intersects(icon) }
-      }?.visibleFrame ?? screenFrame()
     let size = panel.frame.size
-    let top = anchor().map { $0.minY - 6 } ?? screen.maxY - 6
-    let wanted = anchor().map(\.minX) ?? screen.maxX
-    let x = min(max(wanted, screen.minX + 8), screen.maxX - size.width - 8)
+    let icon = anchor()
+    let hosting = icon.flatMap { icon in NSScreen.screens.first { $0.frame.intersects(icon) } }
+    guard let icon, let screen = hosting?.visibleFrame else {
+      let screen = NSScreen.main?.visibleFrame ?? screenFrame()
+      panel.setFrame(
+        NSRect(
+          x: screen.maxX - size.width - 8, y: screen.maxY - 6 - size.height, width: size.width,
+          height: size.height), display: false)
+      return
+    }
+    let x = min(max(icon.minX, screen.minX + 8), screen.maxX - size.width - 8)
     panel.setFrame(
-      NSRect(x: x, y: top - size.height, width: size.width, height: size.height), display: false)
+      NSRect(x: x, y: icon.minY - 6 - size.height, width: size.width, height: size.height),
+      display: false)
   }
 
   private func watchOutsideClicks() {
@@ -201,31 +205,34 @@ final class PanelController: NSObject {
   }
 
   private func watchPointer() {
-    pointerMonitor = NSEvent.addGlobalMonitorForEvents(matching: .mouseMoved) { [weak self] _ in
-      MainActor.assumeIsolated { self?.samplePointer() }
-    }
+    pointerMonitors = [
+      NSEvent.addGlobalMonitorForEvents(matching: .mouseMoved) { [weak self] _ in
+        MainActor.assumeIsolated { self?.samplePointer() }
+      },
+      NSEvent.addLocalMonitorForEvents(matching: .mouseMoved) { [weak self] event in
+        MainActor.assumeIsolated { self?.samplePointer() }
+        return event
+      },
+    ].compactMap { $0 }
+    panel.contentView?.addTrackingArea(
+      NSTrackingArea(
+        rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+        owner: self, userInfo: nil))
+  }
+
+  @objc func mouseEntered(with event: NSEvent) {
+    samplePointer()
+  }
+
+  @objc func mouseExited(with event: NSEvent) {
+    samplePointer()
   }
 
   private func samplePointer() {
     let location = NSEvent.mouseLocation
-    let icon = anchor()
-    let overIcon = icon.map { Self.contains($0, location) } ?? false
+    let overIcon = anchor().map { Self.contains($0, location) } ?? false
     let overPanel = panel.isVisible && Self.contains(panel.frame, location)
-    let near = icon.map { Self.contains($0.insetBy(dx: -80, dy: -60), location) } ?? false
-    setSampling(fast: near || panel.isVisible || machine.phase != .hidden)
-    guard lastPointer?.icon != overIcon || lastPointer?.panel != overPanel else { return }
-    lastPointer = (overIcon, overPanel)
     send(.pointer(overIcon: overIcon, overPanel: overPanel))
-  }
-
-  private func setSampling(fast: Bool) {
-    guard fast != samplingFast || pointerTimer == nil else { return }
-    samplingFast = fast
-    pointerTimer?.invalidate()
-    pointerTimer = Timer.scheduledTimer(withTimeInterval: fast ? 1.0 / 30 : 0.2, repeats: true) {
-      [weak self] _ in
-      MainActor.assumeIsolated { self?.samplePointer() }
-    }
   }
 
   private static func contains(_ rect: NSRect, _ point: NSPoint) -> Bool {
