@@ -19,6 +19,10 @@ enum LaunchAgent {
     run("/bin/launchctl", ["print", service]) == 0
   }
 
+  static func kickstart() -> Bool {
+    run("/bin/launchctl", ["kickstart", service]) == 0
+  }
+
   static func enable() -> Bool {
     do {
       try FileManager.default.createDirectory(

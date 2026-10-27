@@ -21,11 +21,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
   func applicationWillFinishLaunching(_ notification: Notification) {
     let me = ProcessInfo.processInfo.processIdentifier
+    let byLaunchd = LaunchAgent.byLaunchd
     switch StartupPlan.decide(
-      me: me, others: others().map(\.processIdentifier), byLaunchd: LaunchAgent.byLaunchd)
+      me: me, others: others().map(\.processIdentifier), byLaunchd: byLaunchd,
+      agentLoaded: !byLaunchd && LaunchAgent.isLoaded())
     {
     case .run:
       LaunchAgent.repairPath()
+    case .kickstart:
+      if LaunchAgent.kickstart() { exit(0) }
+      log.error("Could not kickstart the launch agent, running without it")
     case .yield:
       others().first?.activate()
       exit(0)

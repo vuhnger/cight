@@ -30,9 +30,13 @@ public enum StartupPlan: Sendable, Equatable {
   case run
   case yield
   case waitForOthers
+  case kickstart
 
-  public static func decide(me: Int32, others: [Int32], byLaunchd: Bool) -> StartupPlan {
+  public static func decide(
+    me: Int32, others: [Int32], byLaunchd: Bool, agentLoaded: Bool = false
+  ) -> StartupPlan {
     if byLaunchd { return others.isEmpty ? .run : .waitForOthers }
-    return others.contains { $0 < me } ? .yield : .run
+    if others.contains(where: { $0 < me }) { return .yield }
+    return agentLoaded ? .kickstart : .run
   }
 }

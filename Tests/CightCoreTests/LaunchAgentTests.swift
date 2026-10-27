@@ -61,3 +61,20 @@ struct StartupPlanTests {
     #expect(StartupPlan.decide(me: 10, others: [11], byLaunchd: true) == .waitForOthers)
   }
 }
+
+struct KickstartPlanTests {
+  @Test func aPlainLaunchHandsOverToALoadedAgent() {
+    #expect(
+      StartupPlan.decide(me: 10, others: [], byLaunchd: false, agentLoaded: true) == .kickstart)
+    #expect(
+      StartupPlan.decide(me: 10, others: [11], byLaunchd: false, agentLoaded: true) == .kickstart)
+  }
+
+  @Test func anOlderInstanceStillWinsOverAKickstart() {
+    #expect(StartupPlan.decide(me: 10, others: [4], byLaunchd: false, agentLoaded: true) == .yield)
+  }
+
+  @Test func theLaunchdCopyNeverKicksItself() {
+    #expect(StartupPlan.decide(me: 10, others: [], byLaunchd: true, agentLoaded: true) == .run)
+  }
+}
