@@ -36,15 +36,12 @@ final class LaunchAtLogin {
   }
 
   private func enable() async {
-    AppInstance.lock?.release()
-    let started = await Task.detached { LaunchAtLogin.startAgent(freshFirst: true) }.value
-    if started {
+    if await LaunchAtLogin.handOverToAgent(freshFirst: true) {
       error = nil
       refresh()
       NSApp.terminate(nil)
       return
     }
-    AppInstance.lock = InstanceLock.acquire(at: AppInstance.lockURL).lock
     refresh()
     error = "Cight could not start its background agent. Try again."
   }
@@ -96,6 +93,16 @@ final class LaunchAtLogin {
     try? service.unregister()
     Thread.sleep(forTimeInterval: settleTime)
     try service.register()
+  }
+
+  static func handOverToAgent(freshFirst: Bool) async -> Bool {
+    AppInstance.lock?.release()
+    let started = await Task.detached { startAgent(freshFirst: freshFirst) }.value
+    if !started {
+      AppInstance.lock = InstanceLock.acquire(at: AppInstance.lockURL).lock
+      if AppInstance.lock == nil { NSApp.terminate(nil) }
+    }
+    return started
   }
 
   nonisolated static func startAgent(freshFirst: Bool) -> Bool {

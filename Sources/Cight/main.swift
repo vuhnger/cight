@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   private var settingsWindow: SettingsWindow?
   private var notifier: Notifier?
   private var settingsModel: SettingsModel?
+  private var retryAgentLater = false
   private let log = Logger(subsystem: "com.vuhnger.cight", category: "startup")
 
   private var startedByAgent: Bool { LaunchAgent.isStartedByAgent(arguments: arguments) }
@@ -40,6 +41,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       log.error("The launch agent did not start, running without it")
       AppInstance.lock = InstanceLock.acquire(at: AppInstance.lockURL).lock
       if AppInstance.lock == nil { exit(0) }
+      retryAgentLater = true
     case .exitQuietly:
       exit(0)
     case .exitFailure:
@@ -73,6 +75,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let window = SettingsWindow(model: model, notifier: notifier)
     settingsWindow = window
     monitor.start()
+
+    if retryAgentLater {
+      Task {
+        try? await Task.sleep(for: .seconds(15))
+        if await LaunchAtLogin.handOverToAgent(freshFirst: true) { NSApp.terminate(nil) }
+      }
+    }
 
     if SettingsLaunchPolicy.shouldOpen(
       startedByLaunchAgent: startedByAgent, watchedCount: monitor.watched.count)
