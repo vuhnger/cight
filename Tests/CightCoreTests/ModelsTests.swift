@@ -46,6 +46,22 @@ struct ModelsTests {
     #expect(run.state == .neutral)
   }
 
+  @Test func decodesFractionalSecondTimestamps() throws {
+    let json = """
+      {"total_count": 2, "workflow_runs": [
+        {"id": 1, "workflow_id": 2, "created_at": "2023-11-14T22:13:20.123Z",
+         "run_started_at": "2023-11-14T22:13:21.5Z", "updated_at": "2023-11-14T22:14:20.999Z"},
+        {"id": 2, "workflow_id": 2, "created_at": "2023-11-14T22:13:20Z"}
+      ]}
+      """
+    let page = try JSONDecoder.github.decode(RunsPage.self, from: Data(json.utf8))
+    #expect(page.runs.map(\.id) == [1, 2])
+    let fractional = page.runs[0]
+    #expect(abs(fractional.createdAt.timeIntervalSince1970 - 1_700_000_000.123) < 0.001)
+    #expect(abs((fractional.runStartedAt?.timeIntervalSince1970 ?? 0) - 1_700_000_001.5) < 0.001)
+    #expect(page.runs[1].createdAt == Date(timeIntervalSince1970: 1_700_000_000))
+  }
+
   @Test func oneBadRunDoesNotDropThePage() throws {
     let json = """
       {"total_count": 3, "workflow_runs": [

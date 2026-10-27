@@ -31,10 +31,21 @@ struct PollPolicyTests {
     #expect(schedule == [5, 10, 20, 40, 80, 160, 300, 300, 300])
   }
 
-  @Test func addsUpToTwentyFivePercentJitterAndNeverExceedsTheCap() {
+  @Test func addsUpToTwentyFivePercentJitter() {
     #expect(delay(after: .server(500), failures: 1, jitter: 1) == 6.25)
     #expect(delay(after: .server(500), failures: 1, jitter: 0.5) == 5.625)
-    #expect(delay(after: .server(500), failures: 30, jitter: 1) == 300)
+  }
+
+  @Test func jitterStillSpreadsRetriesAtTheCap() {
+    #expect(delay(after: .server(500), failures: 30, jitter: 0) == 300)
+    #expect(delay(after: .server(500), failures: 30, jitter: 0.5) == 337.5)
+    #expect(delay(after: .server(500), failures: 30, jitter: 1) == 375)
+  }
+
+  @Test func clampsJitterToTheUnitInterval() {
+    #expect(delay(after: .server(500), failures: 1, jitter: 7) == 6.25)
+    #expect(delay(after: .server(500), failures: 1, jitter: -3) == 5)
+    #expect(delay(after: .server(500), failures: 1, jitter: .nan) == 5)
   }
 
   @Test func transportServerAndDecodingErrorsAllBackOff() {
@@ -53,7 +64,13 @@ struct PollPolicyTests {
 
   @Test func waitsUntilTheRateLimitResumeDate() {
     #expect(delay(after: .rateLimited(resumeAt: at(90)), panelVisible: true) == 90)
-    #expect(delay(after: .rateLimited(resumeAt: at(-5))) == 0)
+  }
+
+  @Test func neverPollsFasterThanTheFloorWhileRateLimited() {
+    #expect(delay(after: .rateLimited(resumeAt: at(-5))) == 5)
+    #expect(delay(after: .rateLimited(resumeAt: at(0))) == 5)
+    #expect(delay(after: .rateLimited(resumeAt: at(2))) == 5)
+    #expect(delay(after: .rateLimited(resumeAt: at(-600)), wokeFromSleep: true) == 5)
   }
 
   @Test func signedOutChecksEverySixtySeconds() {

@@ -102,6 +102,18 @@ struct RunTrackerTests {
     #expect(events.isEmpty)
   }
 
+  @Test func usesOnlyTheNewestRunPerKeyOnARawNewestFirstPage() {
+    var tracker = RunTracker()
+    _ = tracker.ingest(repo: "o/a", runs: [passed(1)], filter: .all)
+    let page = [running(3), failed(2), passed(1)]
+    let events = tracker.ingest(repo: "o/a", runs: page, filter: .all)
+    #expect(kinds(events) == [.started])
+    #expect(events.first?.run.id == 3)
+    #expect(tracker.ingest(repo: "o/a", runs: page, filter: .all).isEmpty)
+    let finished = [failed(3), failed(2), passed(1)]
+    #expect(kinds(tracker.ingest(repo: "o/a", runs: finished, filter: .all)) == [.failed])
+  }
+
   @Test func neverFiresTheSameEventTwice() {
     var tracker = RunTracker()
     _ = tracker.ingest(repo: "o/a", runs: [passed(1)], filter: .all)

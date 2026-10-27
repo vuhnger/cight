@@ -41,6 +41,72 @@ struct GitHubClientTests {
     #expect(configuration.timeoutIntervalForRequest == 15)
   }
 
+  @Test func eachRequestHasAFifteenSecondTimeoutAndIgnoresLocalCaches() async throws {
+    let (client, _) = makeClient { _ in ok("user") }
+    _ = try await client.viewer()
+    let request = try #require(StubProtocol.requests.first)
+    #expect(request.timeoutInterval == 15)
+    #expect(request.cachePolicy == .reloadIgnoringLocalCacheData)
+  }
+
+  @Test func a200WithoutAnETagEvictsTheOldEntry() async throws {
+    let (client, _) = makeClient { request in
+      switch StubProtocol.requests.count {
+      case 1: ok("runs", headers: ["ETag": "\"abc\""])
+      case 2: ok("runs")
+      default: ok("runs")
+      }
+    }
+    for _ in 1...3 { _ = try await client.runs(owner: "o", name: "r") }
+    #expect(StubProtocol.requests[1].value(forHTTPHeaderField: "If-None-Match") == "\"abc\"")
+    #expect(StubProtocol.requests[2].value(forHTTPHeaderField: "If-None-Match") == nil)
+  }
+
+  @Test func a404EvictsTheOldEntry() async throws {
+    let (client, _) = makeClient { _ in
+      switch StubProtocol.requests.count {
+      case 1: ok("runs", headers: ["ETag": "\"abc\""])
+      case 2: StubReply(status: 404)
+      default: ok("runs")
+      }
+    }
+    _ = try await client.runs(owner: "o", name: "r")
+    await #expect(throws: GitHubError.notFound) { try await client.runs(owner: "o", name: "r") }
+    _ = try await client.runs(owner: "o", name: "r")
+    #expect(StubProtocol.requests[2].value(forHTTPHeaderField: "If-None-Match") == nil)
+  }
+
+  @Test func aChangedTokenClearsTheCache() async throws {
+    let (client, _) = makeClient(tokens: ["old", "new"]) { request in
+      let bearer = request.value(forHTTPHeaderField: "Authorization")
+      switch StubProtocol.requests.count {
+      case 1: return ok("runs", headers: ["ETag": "\"abc\""])
+      case 2: return StubReply(status: 401)
+      default: return bearer == "Bearer new" ? ok("runs") : StubReply(status: 401)
+      }
+    }
+    _ = try await client.runs(owner: "o", name: "r")
+    _ = try await client.runs(owner: "o", name: "r")
+    #expect(StubProtocol.requests[2].value(forHTTPHeaderField: "If-None-Match") == nil)
+  }
+
+  @Test(arguments: [
+    ("a b", "r"), ("o", "r?x=1"), ("o", "r/../x"), ("..", "r"), ("o", "."), ("", "r"),
+  ])
+  func rejectsOwnersAndNamesThatCannotBePathSegments(owner: String, name: String) async {
+    let (client, _) = makeClient { _ in ok("runs") }
+    await #expect(throws: GitHubError.notFound) { try await client.runs(owner: owner, name: name) }
+    await #expect(throws: GitHubError.notFound) { try await client.repo(owner: owner, name: name) }
+    #expect(StubProtocol.requests.isEmpty)
+  }
+
+  @Test func acceptsDotsDashesAndUnderscoresInNames() async throws {
+    let (client, _) = makeClient { _ in ok("runs") }
+    _ = try await client.runs(owner: "Some-Org_1", name: "swift.format-2")
+    #expect(
+      StubProtocol.requests.first?.url?.path == "/repos/Some-Org_1/swift.format-2/actions/runs")
+  }
+
   @Test func sendsRequiredHeaders() async throws {
     let (client, _) = makeClient { _ in ok("user") }
     _ = try await client.viewer()

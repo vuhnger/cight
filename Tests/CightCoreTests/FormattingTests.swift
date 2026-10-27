@@ -33,6 +33,18 @@ struct FormattingTests {
     #expect(Formatting.remaining(secondsLeft) == expected)
   }
 
+  @Test func survivesNonFiniteAndHugeValues() {
+    #expect(Formatting.duration(.nan) == "0s")
+    #expect(Formatting.duration(.infinity) == "0s")
+    #expect(Formatting.duration(-.infinity) == "0s")
+    #expect(Formatting.duration(1e30) == Formatting.duration(1e12))
+    #expect(Formatting.relative(from: Date(timeIntervalSince1970: .nan), now: t0) == "just now")
+    #expect(!Formatting.relative(from: Date(timeIntervalSince1970: -1e30), now: t0).isEmpty)
+    #expect(Formatting.remaining(.nan) == "<1m left")
+    #expect(!Formatting.remaining(.infinity).isEmpty)
+    #expect(!Formatting.remaining(-.infinity).isEmpty)
+  }
+
   @Test func stripsTheBotSuffixOnly() {
     #expect(Formatting.login("dependabot[bot]") == "dependabot")
     #expect(Formatting.login("octocat") == "octocat")

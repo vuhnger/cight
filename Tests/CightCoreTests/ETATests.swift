@@ -75,6 +75,30 @@ struct ETATests {
     #expect(progress.overdueBy == 0)
   }
 
+  @Test func takesTheNewestTenSuccessfulRunsBeforeDroppingUnusableOnes() {
+    var runs = (1...4).map { makeRun(id: $0, created: TimeInterval(1000 + $0)) }
+    runs += (1...6).map {
+      successfulRun(id: 10 + $0, created: TimeInterval(500 + $0), duration: Double($0) * 10)
+    }
+    runs += (1...3).map {
+      successfulRun(id: 20 + $0, created: TimeInterval($0), duration: 5000)
+    }
+    let estimate = ETA.estimate(for: running, among: runs)
+    #expect(estimate?.sampleCount == 6)
+    #expect(estimate?.median == 35)
+  }
+
+  @Test func progressWithoutAUsableMedianIsEmptyInsteadOfNaN() {
+    for median in [0, -5, Double.nan, .infinity] {
+      let progress = ETA.progress(elapsed: 30, median: median)
+      #expect(progress.fraction == 0)
+      #expect(!progress.isOverdue)
+      #expect(progress.overdueBy == 0)
+    }
+    #expect(ETA.progress(elapsed: .nan, median: 60).fraction == 0)
+    #expect(ETA.progress(elapsed: -5, median: 60).fraction == 0)
+  }
+
   @Test func progressIsCappedAtOneAndFlagsOverdue() {
     let progress = ETA.progress(elapsed: 150, median: 120)
     #expect(progress.fraction == 1)
