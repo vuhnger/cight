@@ -25,7 +25,7 @@ private struct Outcome: Sendable {
 final class Monitor {
   private(set) var repos: [RepoModel] = []
   private(set) var notice: PanelNotice?
-  private(set) var glyphs: [MenuBarGlyph] = []
+  private(set) var glyphs: [MenuBarGlyph] = [.idle]
   var onEvents: (([RunEvent]) -> Void)?
   var onSession: ((SessionState) -> Void)?
 
@@ -322,7 +322,7 @@ final class Monitor {
     case .running, .overdue: 1
     case .queued: 2
     case .passed: 3
-    case .signedOut, nil: 4
+    case .signedOut, .idle, nil: 4
     }
   }
 

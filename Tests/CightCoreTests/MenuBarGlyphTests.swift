@@ -67,18 +67,31 @@ struct MenuBarGlyphTests {
     #expect(MenuBarGlyphs.glyph(for: repo([]), now: at(10)) == nil)
   }
 
-  @Test func glyphsKeepPanelOrderAndDropReposWithNothingToShow() {
+  @Test func glyphsKeepPanelOrderAndDropPassedAndEmptyRepos() {
     let repos = [
-      repo([makeRun(id: 1, conclusion: "failure")]), repo([]),
-      repo([makeRun(id: 2, conclusion: "skipped")]), repo([makeRun(id: 3)]),
+      repo([makeRun(id: 1, conclusion: "failure")]), repo([makeRun(id: 2)]), repo([]),
+      repo([makeRun(id: 3, conclusion: "skipped")]),
+      repo([makeRun(id: 4, status: "queued", conclusion: nil)]),
     ]
     #expect(
-      MenuBarGlyphs.glyphs(repos: repos, signedOut: false, now: at(10)) == [.failed, .passed])
+      MenuBarGlyphs.glyphs(repos: repos, signedOut: false, now: at(10)) == [.failed, .queued])
   }
 
-  @Test func nothingToShowAnywhereGivesNoGlyphs() {
-    #expect(MenuBarGlyphs.glyphs(repos: [repo([])], signedOut: false, now: at(10)).isEmpty)
-    #expect(MenuBarGlyphs.glyphs(repos: [], signedOut: false, now: at(10)).isEmpty)
+  @Test func allPassedShowsTheIdleIcon() {
+    let repos = [repo([makeRun(id: 1)]), repo([makeRun(id: 2)])]
+    #expect(MenuBarGlyphs.glyphs(repos: repos, signedOut: false, now: at(10)) == [.idle])
+  }
+
+  @Test func nothingWatchedShowsTheIdleIcon() {
+    #expect(MenuBarGlyphs.glyphs(repos: [], signedOut: false, now: at(10)) == [.idle])
+    #expect(MenuBarGlyphs.glyphs(repos: [repo([])], signedOut: false, now: at(10)) == [.idle])
+  }
+
+  @Test func mixedActiveAndPassedShowsOnlyTheActiveOnes() {
+    let repos = [repo([makeRun(id: 1)]), repo([running(id: 2)]), repo([makeRun(id: 3)])]
+    #expect(
+      MenuBarGlyphs.glyphs(repos: repos, signedOut: false, now: at(10))
+        == [.running(progress: nil)])
   }
 
   @Test func signedOutIsASingleLockWhateverTheRepos() {
