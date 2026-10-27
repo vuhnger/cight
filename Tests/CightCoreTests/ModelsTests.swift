@@ -17,6 +17,14 @@ struct ModelsTests {
     #expect(rerun.triggeringActor?.login == "rintaro")
   }
 
+  @Test func decodesCommitTitleAndStarterAvatar() throws {
+    let page = try JSONDecoder.github.decode(RunsPage.self, from: Fixture.data("runs"))
+    let first = page.runs[0]
+    #expect(first.displayTitle == "Replace cmake-smoke-test with reusable CMake build workflow")
+    #expect(first.actor?.avatarUrl == "https://avatars.githubusercontent.com/u/601636?v=4")
+    #expect(page.runs[1].displayTitle == nil)
+  }
+
   @Test func decodesRecordedRepoUserAndRepoList() throws {
     let repo = try JSONDecoder.github.decode(Repo.self, from: Fixture.data("repo"))
     #expect(repo.fullName == "swiftlang/swift-format")

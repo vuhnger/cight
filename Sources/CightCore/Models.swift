@@ -23,6 +23,7 @@ public struct Repo: Decodable, Sendable, Equatable, Identifiable {
 
 public struct Account: Decodable, Sendable, Equatable {
   public let login: String
+  public let avatarUrl: String?
 }
 
 public struct RepoRef: Decodable, Sendable, Equatable {
@@ -35,6 +36,7 @@ public struct WorkflowRun: Decodable, Sendable, Equatable, Identifiable {
   public let workflowId: Int
   public let createdAt: Date
   public let name: String?
+  public let displayTitle: String?
   public let status: String?
   public let conclusion: String?
   public let event: String?
