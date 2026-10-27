@@ -61,7 +61,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     monitor.onSession = { state in Task { await notifier.observe(state) } }
     self.notifier = notifier
 
-    let window = SettingsWindow(notifier: notifier)
+    let window = SettingsWindow(notifier: notifier, updates: UpdateChecker(controller: updater))
     settingsWindow = window
     monitor.start()
 
