@@ -88,6 +88,7 @@ final class Monitor {
 
   func panelVisibilityChanged(_ visible: Bool) {
     panelVisible = visible
+    if !visible { for model in models.values { model.userExpanded = nil } }
     guard visible else { return }
     if Date().timeIntervalSince(lastPollStart) > 1 { forced = true }
     nudge()
@@ -242,14 +243,14 @@ final class Monitor {
     }
     var events: [RunEvent] = []
     var live = Set<Int>()
-    var ordered: [(model: RepoModel, rank: Int, newest: Date)] = []
+    var ordered: [RepoModel] = []
     for repo in list {
       let id = repo.key
       let model = models[id] ?? RepoModel(owner: repo.owner, name: repo.name)
       models[id] = model
       guard let outcome = outcomes.first(where: { $0.repo.id == repo.id }) else {
         if let last = menuInputs[id] { live.formUnion(last.visible.map(\.id)) }
-        ordered.append((model, rank(of: model), model.newest ?? .distantPast))
+        ordered.append(model)
         continue
       }
       switch outcome.result {
@@ -273,10 +274,11 @@ final class Monitor {
       case .failure:
         if let last = menuInputs[id] { live.formUnion(last.visible.map(\.id)) }
       }
-      ordered.append((model, rank(of: model), model.newest ?? .distantPast))
+      ordered.append(model)
     }
-    ordered.sort { ($0.rank, $1.newest) < ($1.rank, $0.newest) }
-    let newOrder = ordered.map(\.model)
+    let byId = Dictionary(uniqueKeysWithValues: ordered.map { ($0.id, $0) })
+    let newOrder = RepoCardRules.newestFirst(ordered.map { (id: $0.id, newest: $0.newest) })
+      .compactMap { byId[$0] }
     if newOrder.map(\.id) != repos.map(\.id) { repos = newOrder }
     let ids = Set(list.map(\.key))
     models = models.filter { ids.contains($0.key) }
@@ -303,17 +305,6 @@ final class Monitor {
       $0.visible.contains { $0.state == .running || $0.state == .queued }
     }
     if !events.isEmpty { onEvents?(events) }
-  }
-
-  private func rank(of model: RepoModel) -> Int {
-    if model.problem != nil { return 5 }
-    return switch model.glyph {
-    case .failed: 0
-    case .running, .overdue: 1
-    case .queued: 2
-    case .passed: 3
-    case .signedOut, .idle, nil: 4
-    }
   }
 
   private func apply(_ fetched: Fetched, to model: RepoModel) {
