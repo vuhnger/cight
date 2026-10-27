@@ -180,20 +180,25 @@ final class PanelController: NSObject {
 
   private func position() {
     let size = panel.frame.size
-    let icon = anchor()
-    let hosting = icon.flatMap { icon in NSScreen.screens.first { $0.frame.intersects(icon) } }
-    guard let icon, let screen = hosting?.visibleFrame else {
-      let screen = NSScreen.main?.visibleFrame ?? screenFrame()
-      panel.setFrame(
-        NSRect(
-          x: screen.maxX - size.width - 8, y: screen.maxY - 6 - size.height, width: size.width,
-          height: size.height), display: false)
+    let inset = Metrics.outerPadding
+    let screens = NSScreen.screens.map {
+      PanelPlacement.Screen(frame: $0.frame, visibleFrame: $0.visibleFrame)
+    }
+    if let icon = anchor(),
+      let origin = PanelPlacement.origin(
+        icon: icon, screens: screens,
+        insets: PanelPlacement.Insets(leading: inset, trailing: inset, top: inset),
+        panelSize: size)
+    {
+      panel.setFrame(NSRect(origin: origin, size: size), display: false)
       return
     }
-    let x = min(max(icon.minX, screen.minX + 8), screen.maxX - size.width - 8)
+    let screen = NSScreen.main?.visibleFrame ?? screenFrame()
     panel.setFrame(
-      NSRect(x: x, y: icon.minY - 6 - size.height, width: size.width, height: size.height),
-      display: false)
+      NSRect(
+        x: screen.maxX - size.width - PanelPlacement.margin + inset,
+        y: screen.maxY - PanelPlacement.gap + inset - size.height, width: size.width,
+        height: size.height), display: false)
   }
 
   private func watchOutsideClicks() {
