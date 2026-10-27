@@ -31,6 +31,7 @@ final class LaunchAtLogin {
 
   private func enable() {
     do {
+      try? service.unregister()
       try service.register()
       error = nil
       LaunchAtLogin.currentIdentity()?.save(to: .standard)
