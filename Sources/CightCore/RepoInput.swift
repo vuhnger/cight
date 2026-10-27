@@ -69,7 +69,8 @@ public enum RepoAdder {
     input: String,
     filter: BranchFilter = .mine,
     fetch: (String, String) async throws -> Repo,
-    store: (WatchedRepo) -> WatchList.AddOutcome
+    store: (WatchedRepo) -> WatchList.AddOutcome,
+    isolation: isolated (any Actor)? = #isolation
   ) async -> AddRepoResult {
     guard let parsed = RepoInput.parse(input) else { return .invalidInput }
     do {

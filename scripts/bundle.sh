@@ -5,8 +5,9 @@ swift build -c release
 BIN="$(swift build -c release --show-bin-path)/Cight"
 APP=build/Cight.app
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Library/LaunchAgents"
 cp "$BIN" "$APP/Contents/MacOS/Cight"
+cp Resources/LaunchAgent/*.plist "$APP/Contents/Library/LaunchAgents/"
 cat > "$APP/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
