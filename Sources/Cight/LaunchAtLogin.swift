@@ -5,11 +5,21 @@ import Foundation
 import Observation
 import ServiceManagement
 
+enum AppInstance {
+  @MainActor static var lock: InstanceLock?
+
+  static var lockURL: URL {
+    URL.applicationSupportDirectory.appending(path: "Cight/instance.lock")
+  }
+}
+
 @MainActor
 @Observable
 final class LaunchAtLogin {
   private(set) var status: LoginItemStatus
   private(set) var error: String?
+
+  nonisolated private static let settleTime: TimeInterval = 2
 
   @ObservationIgnored private let service = SMAppService.agent(plistName: LaunchAgent.plistName)
 
@@ -26,18 +36,17 @@ final class LaunchAtLogin {
   }
 
   private func enable() async {
-    do {
-      try? await service.unregister()
-      try service.register()
+    AppInstance.lock?.release()
+    let started = await Task.detached { LaunchAtLogin.startAgent(freshFirst: true) }.value
+    if started {
       error = nil
-      LaunchAtLogin.currentIdentity()?.save(to: .standard)
-    } catch {
-      self.error = "Could not enable launch at login: \(error.localizedDescription)"
-    }
-    refresh()
-    if status == .enabled, !LaunchAgent.isStartedByAgent(arguments: CommandLine.arguments) {
+      refresh()
       NSApp.terminate(nil)
+      return
     }
+    AppInstance.lock = InstanceLock.acquire(at: AppInstance.lockURL).lock
+    refresh()
+    error = "Cight could not start its background agent. Try again."
   }
 
   private func disable() async {
@@ -82,30 +91,37 @@ final class LaunchAtLogin {
     }
   }
 
-  static func agentEnabled() -> Bool {
+  nonisolated static func registerFresh() throws {
+    let service = SMAppService.agent(plistName: LaunchAgent.plistName)
+    try? service.unregister()
+    Thread.sleep(forTimeInterval: settleTime)
+    try service.register()
+  }
+
+  nonisolated static func startAgent(freshFirst: Bool) -> Bool {
+    for attempt in 0..<2 {
+      if freshFirst || attempt > 0 { try? registerFresh() }
+      _ = kickstart()
+      let outcome = InstanceLock.waitForHolder(
+        at: AppInstance.lockURL, timeout: StartupPlan.agentStartTimeout)
+      guard outcome == .held else { continue }
+      currentIdentity()?.save(to: .standard)
+      return true
+    }
+    return false
+  }
+
+  nonisolated static func agentEnabled() -> Bool {
     SMAppService.agent(plistName: LaunchAgent.plistName).status == .enabled
   }
 
-  static func reregisterIfStale(defaults: UserDefaults) {
-    guard let current = currentIdentity() else { return }
-    let service = SMAppService.agent(plistName: LaunchAgent.plistName)
-    guard
-      ReregisterPolicy.shouldReregister(
-        agentEnabled: service.status == .enabled, stored: AgentIdentity.load(from: defaults),
-        current: current)
-    else { return }
-    let finished = DispatchSemaphore(value: 0)
-    Task.detached {
-      let fresh = SMAppService.agent(plistName: LaunchAgent.plistName)
-      try? await fresh.unregister()
-      try? fresh.register()
-      finished.signal()
-    }
-    finished.wait()
-    current.save(to: defaults)
+  static func isStale(defaults: UserDefaults) -> Bool {
+    guard let current = currentIdentity() else { return false }
+    return ReregisterPolicy.shouldReregister(
+      agentEnabled: agentEnabled(), stored: AgentIdentity.load(from: defaults), current: current)
   }
 
-  static func kickstart() -> Bool {
+  nonisolated static func kickstart() -> Bool {
     let process = Process()
     process.executableURL = URL(filePath: "/bin/launchctl")
     process.arguments = ["kickstart", "gui/\(getuid())/\(LaunchAgent.label)"]
@@ -120,7 +136,7 @@ final class LaunchAtLogin {
     return process.terminationStatus == 0
   }
 
-  private static func currentIdentity() -> AgentIdentity? {
+  nonisolated private static func currentIdentity() -> AgentIdentity? {
     guard
       let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String,
       let url = Bundle.main.executableURL,

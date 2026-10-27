@@ -11,47 +11,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   private var settingsWindow: SettingsWindow?
   private var notifier: Notifier?
   private var settingsModel: SettingsModel?
-  private var lock: InstanceLock?
   private let log = Logger(subsystem: "com.vuhnger.cight", category: "startup")
 
   private var startedByAgent: Bool { LaunchAgent.isStartedByAgent(arguments: arguments) }
 
-  private static var lockURL: URL {
-    URL.applicationSupportDirectory.appending(path: "Cight/instance.lock")
-  }
-
   func applicationWillFinishLaunching(_ notification: Notification) {
     let waits = LaunchAgent.waitsForLock(arguments: arguments)
     let plain = !startedByAgent && !waits
-    let attempt = InstanceLock.acquire(at: Self.lockURL)
-    if plain { LaunchAtLogin.reregisterIfStale(defaults: .standard) }
+    let attempt = InstanceLock.acquire(at: AppInstance.lockURL)
     switch StartupPlan.decide(
       lock: attempt.outcome, startedByAgent: startedByAgent, waitsForLock: waits,
       agentEnabled: plain && LaunchAtLogin.agentEnabled())
     {
     case .run:
-      lock = attempt.lock
+      AppInstance.lock = attempt.lock
     case .waitForLock:
-      lock = InstanceLock.acquire(at: Self.lockURL, timeout: StartupPlan.waitTimeout).lock
-      if lock == nil {
+      AppInstance.lock =
+        InstanceLock.acquire(at: AppInstance.lockURL, timeout: StartupPlan.waitTimeout).lock
+      if AppInstance.lock == nil {
         log.error("Gave up waiting for the instance lock")
         exit(1)
       }
     case .kickstartThenExit:
       attempt.lock?.release()
-      _ = LaunchAtLogin.kickstart()
-      switch InstanceLock.waitForHolder(at: Self.lockURL, timeout: StartupPlan.agentStartTimeout)
-      {
-      case .held:
+      if LaunchAtLogin.startAgent(freshFirst: LaunchAtLogin.isStale(defaults: .standard)) {
         exit(0)
-      case .failed:
-        log.error("Could not open the instance lock file")
-        exit(1)
-      case .acquired:
-        log.error("The launch agent did not start, running without it")
-        lock = InstanceLock.acquire(at: Self.lockURL).lock
-        if lock == nil { exit(0) }
       }
+      log.error("The launch agent did not start, running without it")
+      AppInstance.lock = InstanceLock.acquire(at: AppInstance.lockURL).lock
+      if AppInstance.lock == nil { exit(0) }
     case .exitQuietly:
       exit(0)
     case .exitFailure:
