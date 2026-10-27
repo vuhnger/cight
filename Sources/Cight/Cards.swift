@@ -231,7 +231,9 @@ struct RunRow: View {
       VStack(spacing: 0) {
         HStack(spacing: 7) {
           RowGlyph(row: row)
-          Text(row.workflow).fontWeight(.medium).lineLimit(1).layoutPriority(2)
+          Text(row.workflow).fontWeight(.medium).lineLimit(1).frame(
+            maxWidth: 150, alignment: .leading
+          ).layoutPriority(1)
           if let number = row.number {
             Text("#\(number)").monospacedDigit().foregroundStyle(.tertiary).layoutPriority(2)
           }
