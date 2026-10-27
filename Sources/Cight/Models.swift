@@ -7,7 +7,7 @@ import Observation
 final class RunRowModel: Identifiable {
   let id: Int
   private(set) var workflow: String
-  private(set) var number: Int?
+  private(set) var pullRequest: Int?
   private(set) var title: String
   private(set) var state: RunState
   private(set) var starter: String
@@ -22,7 +22,7 @@ final class RunRowModel: Identifiable {
   init(run: WorkflowRun, eta: ETAEstimate?) {
     id = run.id
     workflow = run.name ?? "Workflow"
-    number = run.runNumber
+    pullRequest = run.pullRequestNumber
     title = run.displayTitle ?? ""
     state = run.state
     starter = Formatting.login(run.actor?.login ?? "")
@@ -36,7 +36,7 @@ final class RunRowModel: Identifiable {
 
   func update(run: WorkflowRun, eta: ETAEstimate?) {
     set(\.workflow, run.name ?? "Workflow")
-    set(\.number, run.runNumber)
+    set(\.pullRequest, run.pullRequestNumber)
     set(\.title, run.displayTitle ?? "")
     set(\.state, run.state)
     set(\.starter, Formatting.login(run.actor?.login ?? ""))

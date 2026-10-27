@@ -233,7 +233,7 @@ struct RunRow: View {
           RowGlyph(row: row)
           Text(row.workflow).fontWeight(.medium).lineLimit(1)
             .frame(width: row.workflowWidth, alignment: .leading).layoutPriority(1)
-          if let number = row.number {
+          if let number = row.pullRequest {
             Text("#\(number)").monospacedDigit().foregroundStyle(.tertiary).layoutPriority(2)
           }
           AvatarView(url: row.avatar, login: row.starter)
