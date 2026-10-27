@@ -3,7 +3,7 @@ import CightCore
 import SwiftUI
 
 @MainActor
-final class SettingsWindow {
+final class SettingsWindow: NSObject, NSWindowDelegate {
   private let model: SettingsModel
   private let notifier: Notifier
   private let launchAtLogin = LaunchAtLogin()
@@ -12,6 +12,12 @@ final class SettingsWindow {
   init(model: SettingsModel, notifier: Notifier) {
     self.model = model
     self.notifier = notifier
+    super.init()
+  }
+
+  func windowDidBecomeKey(_ notification: Notification) {
+    launchAtLogin.refresh()
+    Task { await notifier.refreshAuthorization() }
   }
 
   func show() {
@@ -28,6 +34,7 @@ final class SettingsWindow {
     window.title = "Cight Settings"
     window.appearance = NSAppearance(named: .darkAqua)
     window.isReleasedWhenClosed = false
+    window.delegate = self
     let controller = NSHostingController(
       rootView: SettingsView(model: model, notifier: notifier, launchAtLogin: launchAtLogin))
     controller.sizingOptions = .preferredContentSize

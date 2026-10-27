@@ -1,3 +1,4 @@
+import AppKit
 import CightCore
 import Observation
 import ServiceManagement
@@ -5,21 +6,17 @@ import ServiceManagement
 @MainActor
 @Observable
 final class LaunchAtLogin {
-  private(set) var status: SMAppService.Status
+  private(set) var status: LoginItemStatus
   private(set) var error: String?
 
-  private let service = SMAppService.agent(plistName: LaunchAgent.plistName)
+  @ObservationIgnored private let service = SMAppService.agent(plistName: LaunchAgent.plistName)
 
   init() {
-    status = service.status
+    status = LaunchAtLogin.map(service.status)
   }
 
-  var isEnabled: Bool {
-    status == .enabled || status == .requiresApproval
-  }
-
-  var needsApproval: Bool {
-    status == .requiresApproval
+  var presentation: LoginItemPresentation {
+    LoginItemPresentation(status: status)
   }
 
   func set(_ enabled: Bool) {
@@ -27,6 +24,9 @@ final class LaunchAtLogin {
       if enabled {
         try service.register()
       } else {
+        if LaunchAgent.isStartedByAgent(arguments: CommandLine.arguments) {
+          startWaitingCopy()
+        }
         try service.unregister()
       }
       error = nil
@@ -34,6 +34,32 @@ final class LaunchAtLogin {
       self.error =
         "Could not \(enabled ? "enable" : "disable") launch at login: \(error.localizedDescription)"
     }
-    status = service.status
+    status = LaunchAtLogin.map(service.status)
+  }
+
+  func refresh() {
+    status = LaunchAtLogin.map(service.status)
+  }
+
+  func openSystemSettings() {
+    SMAppService.openSystemSettingsLoginItems()
+  }
+
+  private func startWaitingCopy() {
+    let configuration = NSWorkspace.OpenConfiguration()
+    configuration.createsNewApplicationInstance = true
+    configuration.activates = false
+    configuration.arguments = [LaunchAgent.waitArgument]
+    NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: configuration)
+  }
+
+  private static func map(_ status: SMAppService.Status) -> LoginItemStatus {
+    switch status {
+    case .enabled: .enabled
+    case .requiresApproval: .requiresApproval
+    case .notFound: .notFound
+    case .notRegistered: .notRegistered
+    @unknown default: .notRegistered
+    }
   }
 }

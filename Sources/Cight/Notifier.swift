@@ -4,70 +4,47 @@ import Observation
 import UserNotifications
 
 @MainActor
-@Observable
-final class Notifier: NSObject, UNUserNotificationCenterDelegate {
-  private(set) var authorization = UNAuthorizationStatus.notDetermined
+protocol NotificationCentering: AnyObject {
+  func authorizationStatus() async -> UNAuthorizationStatus
+  func requestAuthorization() async
+  func add(_ content: NotificationContent) async
+}
 
-  var settings: NotificationSettings {
-    didSet {
-      settings.save(to: defaults)
-      if settings.failed || settings.fixed || settings.started {
-        Task { await requestAuthorizationIfNeeded() }
-      }
-    }
+@MainActor
+final class SystemNotificationCenter: NSObject, NotificationCentering,
+  UNUserNotificationCenterDelegate
+{
+  private let center: UNUserNotificationCenter
+
+  static func make() -> SystemNotificationCenter? {
+    guard Bundle.main.bundleIdentifier != nil else { return nil }
+    return SystemNotificationCenter()
   }
 
-  private let defaults: UserDefaults
-  private let center = UNUserNotificationCenter.current()
-  private var signOutGate = SignOutGate()
-
-  init(defaults: UserDefaults) {
-    self.defaults = defaults
-    settings = NotificationSettings.load(from: defaults)
+  private override init() {
+    center = UNUserNotificationCenter.current()
     super.init()
     center.delegate = self
-    Task { await refreshAuthorization() }
   }
 
-  func refreshAuthorization() async {
-    authorization = await center.notificationSettings().authorizationStatus
+  func authorizationStatus() async -> UNAuthorizationStatus {
+    await center.notificationSettings().authorizationStatus
   }
 
-  func deliver(_ events: [RunEvent]) {
-    for event in events {
-      if let content = NotificationContent.make(for: event, settings: settings) {
-        post(content)
-      }
-    }
-  }
-
-  func observe(signedOut: Bool) {
-    if signOutGate.shouldNotify(signedOut: signedOut) {
-      post(.signedOut)
-    }
-  }
-
-  private func requestAuthorizationIfNeeded() async {
-    await refreshAuthorization()
-    guard authorization == .notDetermined else { return }
+  func requestAuthorization() async {
     _ = try? await center.requestAuthorization(options: [.alert, .sound])
-    await refreshAuthorization()
   }
 
-  private func post(_ content: NotificationContent) {
-    Task {
-      await requestAuthorizationIfNeeded()
-      guard authorization == .authorized || authorization == .provisional else { return }
-      let message = UNMutableNotificationContent()
-      message.title = content.title
-      message.body = content.body
-      message.sound = .default
-      if let url = content.url {
-        message.userInfo = ["url": url.absoluteString]
-      }
-      try? await center.add(
-        UNNotificationRequest(identifier: content.identifier, content: message, trigger: nil))
+  func add(_ content: NotificationContent) async {
+    let message = UNMutableNotificationContent()
+    message.title = content.title
+    message.body = content.body
+    message.sound = .default
+    if let url = content.url {
+      message.userInfo = ["url": url.absoluteString]
     }
+    try? await center.add(
+      UNNotificationRequest(identifier: content.identifier, content: message, trigger: nil))
   }
 
   nonisolated func userNotificationCenter(
@@ -82,5 +59,73 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     let address = response.notification.request.content.userInfo["url"] as? String
     guard let url = address.flatMap(URL.init(string:)) else { return }
     await MainActor.run { _ = NSWorkspace.shared.open(url) }
+  }
+}
+
+@MainActor
+@Observable
+final class Notifier {
+  private(set) var authorization = UNAuthorizationStatus.notDetermined
+
+  var settings: NotificationSettings {
+    didSet {
+      settings.save(to: defaults)
+      if settings.failed || settings.fixed || settings.started {
+        Task { await requestAuthorizationIfNeeded() }
+      }
+    }
+  }
+
+  @ObservationIgnored private let defaults: UserDefaults
+  @ObservationIgnored private let center: (any NotificationCentering)?
+  @ObservationIgnored private var signOutGate = SignOutGate()
+
+  init(defaults: UserDefaults, center: (any NotificationCentering)?) {
+    self.defaults = defaults
+    self.center = center
+    settings = NotificationSettings.load(from: defaults)
+    Task { await refreshAuthorization() }
+  }
+
+  var isAllowed: Bool {
+    authorization == .authorized || authorization == .provisional
+  }
+
+  func refreshAuthorization() async {
+    guard let center else { return }
+    authorization = await center.authorizationStatus()
+  }
+
+  func deliver(_ events: [RunEvent]) async {
+    for event in events {
+      if let content = NotificationContent.make(for: event, settings: settings) {
+        await post(content, mayPrompt: true)
+      }
+    }
+  }
+
+  func observe(_ state: SessionState) async {
+    if signOutGate.shouldNotify(state) {
+      await post(.signedOut, mayPrompt: false)
+    }
+  }
+
+  private func requestAuthorizationIfNeeded() async {
+    guard let center else { return }
+    await refreshAuthorization()
+    guard authorization == .notDetermined else { return }
+    await center.requestAuthorization()
+    await refreshAuthorization()
+  }
+
+  private func post(_ content: NotificationContent, mayPrompt: Bool) async {
+    guard let center else { return }
+    if mayPrompt {
+      await requestAuthorizationIfNeeded()
+    } else {
+      await refreshAuthorization()
+    }
+    guard isAllowed else { return }
+    await center.add(content)
   }
 }

@@ -61,14 +61,3 @@ public struct NotificationContent: Sendable, Equatable {
       title: "\(headline) in \(event.repo)", body: body, url: run.htmlUrl.flatMap(URL.init))
   }
 }
-
-public struct SignOutGate: Sendable {
-  private var wasSignedOut = false
-
-  public init() {}
-
-  public mutating func shouldNotify(signedOut: Bool) -> Bool {
-    defer { wasSignedOut = signedOut }
-    return signedOut && !wasSignedOut
-  }
-}

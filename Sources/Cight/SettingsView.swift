@@ -127,10 +127,16 @@ private struct GeneralPane: View {
     VStack(alignment: .leading, spacing: 14) {
       Toggle(
         "Launch at login",
-        isOn: Binding(get: { launchAtLogin.isEnabled }, set: { launchAtLogin.set($0) }))
-      if launchAtLogin.needsApproval {
-        Text("Approve Cight under Login Items in System Settings to finish.")
-          .foregroundStyle(.orange).font(.callout)
+        isOn: Binding(
+          get: { launchAtLogin.presentation.isOn }, set: { launchAtLogin.set($0) }))
+      if let message = launchAtLogin.presentation.message {
+        HStack {
+          Text(message).foregroundStyle(.orange).font(.callout)
+          Spacer()
+          if launchAtLogin.presentation.offersSystemSettings {
+            Button("Open Login Items") { launchAtLogin.openSystemSettings() }
+          }
+        }
       }
       if let error = launchAtLogin.error {
         Text(error).foregroundStyle(.orange).font(.callout)

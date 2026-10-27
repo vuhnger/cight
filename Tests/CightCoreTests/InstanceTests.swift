@@ -28,7 +28,7 @@ struct InstanceLockTests {
       return held
     }
     #expect(winners.count == 1)
-    winners.forEach { $0.release() }
+    for winner in winners { winner.release() }
   }
 
   @Test func waitingAcquiresOnceTheHolderReleases() throws {

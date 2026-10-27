@@ -26,10 +26,11 @@ final class Monitor {
   private(set) var repos: [RepoModel] = []
   private(set) var notice: PanelNotice?
   private(set) var glyphs: [MenuBarGlyph] = []
+  private(set) var session = SessionState.unknown
   var onEvents: (([RunEvent]) -> Void)?
 
   @ObservationIgnored private var watchList: WatchList
-  @ObservationIgnored private let client: GitHubClient
+  @ObservationIgnored let client: GitHubClient
   @ObservationIgnored private var viewer: String?
   @ObservationIgnored private var metas: [String: RepoMeta] = [:]
   @ObservationIgnored private var ghInstalled = true
@@ -59,9 +60,12 @@ final class Monitor {
     }
   }
 
-  init(defaults: UserDefaults = .standard) {
+  init(
+    defaults: UserDefaults = .standard,
+    client: GitHubClient = GitHubClient(tokenProvider: { await GhTokenReader.read() })
+  ) {
     watchList = WatchList(defaults: defaults)
-    client = GitHubClient(tokenProvider: { await GhTokenReader.read() })
+    self.client = client
     notice = watchList.repos.isEmpty ? .nothingWatched : nil
   }
 
@@ -106,7 +110,6 @@ final class Monitor {
 
   func setFilter(_ filter: BranchFilter, owner: String, name: String) {
     watchList.setFilter(filter, owner: owner, name: name)
-    trackers["\(owner)/\(name)".lowercased()] = nil
     watchListChanged()
   }
 
@@ -302,6 +305,10 @@ final class Monitor {
       signedOut: unauthorized || newNotice == .ghMissing,
       now: now)
     if newGlyphs != glyphs { glyphs = newGlyphs }
+    let nextSession = SessionPolicy.next(
+      current: session, signedOutSignal: unauthorized || newNotice == .ghMissing,
+      anySuccess: outcomes.contains { if case .success = $0.result { true } else { false } })
+    if nextSession != session { session = nextSession }
     hasActiveRun = menuInputs.values.contains {
       $0.visible.contains { $0.state == .running || $0.state == .queued }
     }

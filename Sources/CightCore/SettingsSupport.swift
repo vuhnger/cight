@@ -36,8 +36,14 @@ public enum LaunchAgent {
 
   public static let argument = "--launch-agent"
 
+  public static let waitArgument = "--wait-for-lock"
+
   public static func isStartedByAgent(arguments: [String]) -> Bool {
     arguments.dropFirst().contains(argument)
+  }
+
+  public static func waitsForLock(arguments: [String]) -> Bool {
+    arguments.dropFirst().contains(waitArgument)
   }
 }
 

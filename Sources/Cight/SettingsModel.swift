@@ -20,11 +20,12 @@ final class SettingsModel {
   private(set) var addMessage: String?
 
   private let monitor: Monitor
-  private let client: GitHubClient
+  private var session = SessionState.unknown
 
-  init(monitor: Monitor, client: GitHubClient) {
+  private var client: GitHubClient { monitor.client }
+
+  init(monitor: Monitor) {
     self.monitor = monitor
-    self.client = client
     watched = monitor.watched
   }
 
@@ -50,24 +51,36 @@ final class SettingsModel {
     do {
       allRepos = try await client.repos()
       loadMessage = nil
+    } catch is CancellationError {
+      return
     } catch let error as GitHubError {
+      if case .transport(.cancelled) = error { return }
       loadMessage = UserMessage.text(for: error, now: Date())
     } catch {
-      return
+      loadMessage = "Could not load your repositories. Try again shortly."
+    }
+  }
+
+  func sessionChanged(_ next: SessionState) async {
+    let previous = session
+    session = next
+    if next == .signedIn, previous == .signedOut {
+      await loadRepos()
     }
   }
 
   func add(_ repo: Repo) {
-    finish(RepoAdder.add(repo: repo, store: { self.monitor.add($0) }))
+    finish(RepoAdder.add(repo: repo, store: { self.monitor.add($0) }), submitted: query)
   }
 
   func addTyped() async {
     isAdding = true
     defer { isAdding = false }
+    let submitted = query
     let result = await RepoAdder.add(
       input: query, fetch: { try await self.client.repo(owner: $0, name: $1) },
       store: { self.monitor.add($0) })
-    finish(result)
+    finish(result, submitted: submitted)
   }
 
   func remove(_ repo: WatchedRepo) {
@@ -81,9 +94,9 @@ final class SettingsModel {
     watched = monitor.watched
   }
 
-  private func finish(_ result: AddRepoResult) {
+  private func finish(_ result: AddRepoResult, submitted: String) {
     addMessage = UserMessage.text(for: result, now: Date())
     watched = monitor.watched
-    if case .added = result { query = "" }
+    if case .added = result, query == submitted { query = "" }
   }
 }

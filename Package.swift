@@ -10,6 +10,7 @@ let package = Package(
     .executableTarget(name: "Cight", dependencies: ["CightCore"]),
     .testTarget(
       name: "CightCoreTests", dependencies: ["CightCore"], resources: [.copy("Fixtures")]),
+    .testTarget(name: "CightTests", dependencies: ["Cight", "CightCore"]),
   ],
   swiftLanguageModes: [.v6]
 )
