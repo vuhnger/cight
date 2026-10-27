@@ -17,7 +17,7 @@ private struct Fetched: Sendable {
 }
 
 private struct Outcome: Sendable {
-  let watched: WatchedRepo
+  let repo: Repo
   let result: Result<Fetched, GitHubError>
 }
 
@@ -29,7 +29,9 @@ final class Monitor {
   var onEvents: (([RunEvent]) -> Void)?
   var onSession: ((SessionState) -> Void)?
 
-  @ObservationIgnored private var watchList: WatchList
+  @ObservationIgnored private var discovered: [Repo] = []
+  @ObservationIgnored private var lastDiscovery = Date.distantPast
+  @ObservationIgnored private var discoveryForced = true
   @ObservationIgnored let client: GitHubClient
   @ObservationIgnored private var viewer: String?
   @ObservationIgnored private var metas: [String: RepoMeta] = [:]
@@ -51,22 +53,17 @@ final class Monitor {
   @ObservationIgnored private var sleeper: Task<Void, Never>?
   @ObservationIgnored private var wakeObserver: (any NSObjectProtocol)?
 
-  var watched: [WatchedRepo] { watchList.repos }
-
   var showsRepos: Bool {
     switch notice {
-    case .ghMissing, .signedOut, .nothingWatched: false
+    case .ghMissing, .signedOut, .noRecentRuns: false
     default: true
     }
   }
 
   init(
-    defaults: UserDefaults = .standard,
     client: GitHubClient = GitHubClient(tokenProvider: { await GhTokenReader.read() })
   ) {
-    watchList = WatchList(defaults: defaults)
     self.client = client
-    notice = watchList.repos.isEmpty ? .nothingWatched : nil
   }
 
   func start() {
@@ -76,6 +73,7 @@ final class Monitor {
     ) { [weak self] _ in
       MainActor.assumeIsolated {
         self?.woke = true
+        self?.discoveryForced = true
         self?.pollTask?.cancel()
         self?.nudge()
       }
@@ -92,29 +90,6 @@ final class Monitor {
     panelVisible = visible
     guard visible else { return }
     if Date().timeIntervalSince(lastPollStart) > 1 { forced = true }
-    nudge()
-  }
-
-  @discardableResult
-  func add(_ repo: WatchedRepo) -> WatchList.AddOutcome {
-    let outcome = watchList.add(repo)
-    if outcome == .added { watchListChanged() }
-    return outcome
-  }
-
-  func remove(owner: String, name: String) {
-    watchList.remove(owner: owner, name: name)
-    trackers["\(owner)/\(name)".lowercased()] = nil
-    watchListChanged()
-  }
-
-  func setFilter(_ filter: BranchFilter, owner: String, name: String) {
-    watchList.setFilter(filter, owner: owner, name: name)
-    watchListChanged()
-  }
-
-  private func watchListChanged() {
-    forced = true
     nudge()
   }
 
@@ -148,37 +123,51 @@ final class Monitor {
   }
 
   private func poll() async {
-    let list = watchList.repos
-    guard !list.isEmpty else {
-      lastError = nil
-      apply(outcomes: [], errors: [])
-      return
-    }
-    let outcomes: [Outcome]
+    let login: String
     do {
-      let login = try await viewerLogin()
-      let known = metas
-      let now = Date()
-      outcomes = await withTaskGroup(of: Outcome.self) { [client] group in
-        for watched in list {
-          let id = "\(watched.owner)/\(watched.name)".lowercased()
-          group.addTask {
-            await Self.fetch(
-              client: client, watched: watched, viewer: login, cached: known[id], now: now)
-          }
-        }
-        var all: [Outcome] = []
-        for await outcome in group { all.append(outcome) }
-        return all
-      }
+      login = try await viewerLogin()
     } catch {
       guard !(error is CancellationError), !Task.isCancelled else { return }
-      let failure = error as? GitHubError ?? .transport(.unknown)
-      await finish(outcomes: [], errors: [failure])
+      await finish(outcomes: [], errors: [error as? GitHubError ?? .transport(.unknown)])
       return
     }
+    var errors: [GitHubError] = []
+    let now = Date()
+    if discoveryForced || now.timeIntervalSince(lastDiscovery) >= Self.discoveryInterval {
+      let result = await RepoDiscovery.discover(
+        previous: discovered, now: now,
+        candidates: { [client] in try await client.repos() },
+        latestRun: { [client] repo in
+          let parts = repo.fullName.split(separator: "/").map(String.init)
+          guard parts.count == 2 else { return nil }
+          return try await client.latestRun(
+            owner: parts[0], name: parts[1], actor: login,
+            since: now.addingTimeInterval(-RepoDiscovery.window))
+        })
+      guard !Task.isCancelled else { return }
+      discovered = result.repos
+      if let error = result.error {
+        errors.append(error)
+      } else {
+        lastDiscovery = now
+        discoveryForced = false
+      }
+    }
+    let list = discovered
+    let known = metas
+    let outcomes = await withTaskGroup(of: Outcome.self) { [client] group in
+      for repo in list {
+        group.addTask {
+          await Self.fetch(
+            client: client, repo: repo, viewer: login, cached: known[repo.key], now: now)
+        }
+      }
+      var all: [Outcome] = []
+      for await outcome in group { all.append(outcome) }
+      return all
+    }
     guard !Task.isCancelled else { return }
-    let errors = outcomes.compactMap { outcome -> GitHubError? in
+    errors += outcomes.compactMap { outcome -> GitHubError? in
       if case .failure(let error) = outcome.result { error } else { nil }
     }
     await finish(outcomes: outcomes, errors: errors)
@@ -206,45 +195,45 @@ final class Monitor {
   }
 
   private nonisolated static let metaLifetime: TimeInterval = 300
+  private nonisolated static let discoveryInterval: TimeInterval = 300
 
   private nonisolated static func fetch(
-    client: GitHubClient, watched: WatchedRepo, viewer: String, cached: RepoMeta?, now: Date
+    client: GitHubClient, repo: Repo, viewer: String, cached: RepoMeta?, now: Date
   ) async -> Outcome {
     do {
       let meta: RepoMeta
       if let cached, now.timeIntervalSince(cached.fetchedAt) < metaLifetime {
         meta = cached
       } else {
-        let repo = try await client.repo(owner: watched.owner, name: watched.name)
-        let branches = try? await client.branches(owner: watched.owner, name: watched.name)
+        let branches = try? await client.branches(owner: repo.owner, name: repo.name)
         meta = RepoMeta(repo: repo, branches: branches ?? cached?.branches, fetchedAt: now)
       }
-      let runs = try await client.runs(owner: watched.owner, name: watched.name)
+      let runs = try await client.runs(owner: repo.owner, name: repo.name)
       let group = RunGrouping.groups(
         [
           RepoRuns(
             id: meta.repo.id, fullName: meta.repo.fullName,
             defaultBranch: meta.repo.defaultBranch, runs: runs, liveBranches: meta.branches)
         ],
-        viewer: viewer, filter: watched.filter
+        viewer: viewer
       ).first
       var etas: [Int: ETAEstimate] = [:]
       for run in group?.branches.flatMap(\.runs) ?? [] where run.state == .running {
         etas[run.id] = ETA.estimate(for: run, among: runs)
       }
       let fetched = Fetched(
-        id: "\(watched.owner)/\(watched.name)".lowercased(), meta: meta, group: group,
+        id: repo.key, meta: meta, group: group,
         rawRuns: runs, etas: etas)
-      return Outcome(watched: watched, result: .success(fetched))
+      return Outcome(repo: repo, result: .success(fetched))
     } catch let error as GitHubError {
-      return Outcome(watched: watched, result: .failure(error))
+      return Outcome(repo: repo, result: .failure(error))
     } catch {
-      return Outcome(watched: watched, result: .failure(.transport(.unknown)))
+      return Outcome(repo: repo, result: .failure(.transport(.unknown)))
     }
   }
 
   private func apply(outcomes: [Outcome], errors: [GitHubError]) {
-    let list = watchList.repos
+    let list = discovered
     let now = Date()
     if !outcomes.isEmpty,
       outcomes.contains(where: { if case .success = $0.result { true } else { false } })
@@ -254,11 +243,11 @@ final class Monitor {
     var events: [RunEvent] = []
     var live = Set<Int>()
     var ordered: [(model: RepoModel, rank: Int, newest: Date)] = []
-    for watched in list {
-      let id = "\(watched.owner)/\(watched.name)".lowercased()
-      let model = models[id] ?? RepoModel(owner: watched.owner, name: watched.name)
+    for repo in list {
+      let id = repo.key
+      let model = models[id] ?? RepoModel(owner: repo.owner, name: repo.name)
       models[id] = model
-      guard let outcome = outcomes.first(where: { $0.watched == watched }) else {
+      guard let outcome = outcomes.first(where: { $0.repo.id == repo.id }) else {
         if let last = menuInputs[id] { live.formUnion(last.visible.map(\.id)) }
         ordered.append((model, rank(of: model), model.newest ?? .distantPast))
         continue
@@ -272,7 +261,7 @@ final class Monitor {
         apply(fetched, to: model)
         menuInputs[id] = MenuBarRepo(visible: visible, history: fetched.rawRuns)
         var tracker = trackers[id] ?? RunTracker()
-        events += tracker.ingest(repo: id, runs: fetched.rawRuns, filter: watched.filter)
+        events += tracker.ingest(repo: id, runs: fetched.rawRuns)
         trackers[id] = tracker
       case .failure(.notFound):
         model.problem = .gone
@@ -289,16 +278,17 @@ final class Monitor {
     ordered.sort { ($0.rank, $1.newest) < ($1.rank, $0.newest) }
     let newOrder = ordered.map(\.model)
     if newOrder.map(\.id) != repos.map(\.id) { repos = newOrder }
-    let ids = Set(list.map { "\($0.owner)/\($0.name)".lowercased() })
+    let ids = Set(list.map(\.key))
     models = models.filter { ids.contains($0.key) }
     metas = metas.filter { ids.contains($0.key) }
     menuInputs = menuInputs.filter { ids.contains($0.key) }
+    trackers = trackers.filter { ids.contains($0.key) }
     rows = rows.filter { live.contains($0.key) }
 
     let unauthorized = errors.contains(.unauthorized)
     let newNotice = NoticePolicy.notice(
       ghInstalled: ghInstalled,
-      tokenAvailable: true, watchedCount: list.count, errors: errors, lastUpdated: lastUpdated)
+      tokenAvailable: true, repoCount: list.count, errors: errors, lastUpdated: lastUpdated)
     if newNotice != notice { notice = newNotice }
     let newGlyphs = MenuBarGlyphs.glyphs(
       repos: newOrder.compactMap { menuInputs[$0.id] },
@@ -349,4 +339,9 @@ final class Monitor {
     let newest = visible.map(\.activityDate).max()
     if newest != model.newest { model.newest = newest }
   }
+}
+
+extension Repo {
+  fileprivate var owner: String { String(fullName.split(separator: "/").first ?? "") }
+  fileprivate var key: String { fullName.lowercased() }
 }

@@ -40,11 +40,20 @@ public actor GitHubClient {
   }
 
   public func repos() async throws -> [Repo] {
-    try await get("user/repos?sort=pushed&per_page=100")
+    try await get(
+      "user/repos?sort=pushed&direction=desc&per_page=30"
+        + "&affiliation=owner,collaborator,organization_member")
   }
 
-  public func repo(owner: String, name: String) async throws -> Repo {
-    try await get("repos/\(try segment(owner))/\(try segment(name))")
+  public func latestRun(owner: String, name: String, actor: String, since: Date) async throws
+    -> WorkflowRun?
+  {
+    let day = since.formatted(Date.ISO8601FormatStyle(timeZone: .gmt).year().month().day())
+    let path =
+      "repos/\(try segment(owner))/\(try segment(name))/actions/runs"
+      + "?actor=\(try segment(actor))&created=%3E%3D\(day)&per_page=1"
+    let page: RunsPage = try await get(path)
+    return page.runs.first
   }
 
   public func runs(owner: String, name: String) async throws -> [WorkflowRun] {

@@ -30,14 +30,14 @@ struct RunTrackerTests {
   @Test func firstPollPerRepoIsASilentBaseline() {
     var tracker = RunTracker()
     #expect(
-      tracker.ingest(repo: "o/a", runs: [running(1), failed(2, branch: "x")], filter: .all).isEmpty)
-    #expect(tracker.ingest(repo: "o/b", runs: [running(3)], filter: .all).isEmpty)
+      tracker.ingest(repo: "o/a", runs: [running(1), failed(2, branch: "x")]).isEmpty)
+    #expect(tracker.ingest(repo: "o/b", runs: [running(3)]).isEmpty)
   }
 
   @Test func reportsAStartWhenANewRunIsRunning() {
     var tracker = RunTracker()
-    _ = tracker.ingest(repo: "o/a", runs: [passed(1)], filter: .all)
-    let events = tracker.ingest(repo: "o/a", runs: [running(2)], filter: .all)
+    _ = tracker.ingest(repo: "o/a", runs: [passed(1)])
+    let events = tracker.ingest(repo: "o/a", runs: [running(2)])
     #expect(kinds(events) == [.started])
     #expect(events.first?.run.id == 2)
     #expect(events.first?.repo == "o/a")
@@ -45,139 +45,103 @@ struct RunTrackerTests {
 
   @Test func reportsAStartWhenAQueuedRunBeginsRunning() {
     var tracker = RunTracker()
-    _ = tracker.ingest(repo: "o/a", runs: [queued(2)], filter: .all)
-    #expect(kinds(tracker.ingest(repo: "o/a", runs: [running(2)], filter: .all)) == [.started])
+    _ = tracker.ingest(repo: "o/a", runs: [queued(2)])
+    #expect(kinds(tracker.ingest(repo: "o/a", runs: [running(2)])) == [.started])
   }
 
   @Test func doesNotReportAQueuedRunAsStarted() {
     var tracker = RunTracker()
-    _ = tracker.ingest(repo: "o/a", runs: [passed(1)], filter: .all)
-    #expect(tracker.ingest(repo: "o/a", runs: [queued(2)], filter: .all).isEmpty)
+    _ = tracker.ingest(repo: "o/a", runs: [passed(1)])
+    #expect(tracker.ingest(repo: "o/a", runs: [queued(2)]).isEmpty)
   }
 
   @Test func reportsAFailureWhenARunningRunFails() {
     var tracker = RunTracker()
-    _ = tracker.ingest(repo: "o/a", runs: [running(2)], filter: .all)
-    let events = tracker.ingest(repo: "o/a", runs: [failed(2)], filter: .all)
+    _ = tracker.ingest(repo: "o/a", runs: [running(2)])
+    let events = tracker.ingest(repo: "o/a", runs: [failed(2)])
     #expect(kinds(events) == [.failed])
   }
 
   @Test func reportsAFailureForARunThatFailedBetweenPolls() {
     var tracker = RunTracker()
-    _ = tracker.ingest(repo: "o/a", runs: [passed(1)], filter: .all)
-    #expect(kinds(tracker.ingest(repo: "o/a", runs: [failed(2)], filter: .all)) == [.failed])
+    _ = tracker.ingest(repo: "o/a", runs: [passed(1)])
+    #expect(kinds(tracker.ingest(repo: "o/a", runs: [failed(2)])) == [.failed])
   }
 
   @Test func reportsRecoveryWhenABranchPassesAfterAFailure() {
     var tracker = RunTracker()
-    _ = tracker.ingest(repo: "o/a", runs: [failed(1)], filter: .all)
-    let events = tracker.ingest(repo: "o/a", runs: [passed(2)], filter: .all)
+    _ = tracker.ingest(repo: "o/a", runs: [failed(1)])
+    let events = tracker.ingest(repo: "o/a", runs: [passed(2)])
     #expect(kinds(events) == [.recovered])
   }
 
   @Test func aReRunOfAFailedRunThatPassesCountsAsRecovered() {
     var tracker = RunTracker()
-    _ = tracker.ingest(repo: "o/a", runs: [failed(5)], filter: .all)
+    _ = tracker.ingest(repo: "o/a", runs: [failed(5)])
     #expect(
-      kinds(tracker.ingest(repo: "o/a", runs: [running(5, attempt: 2)], filter: .all)) == [.started]
+      kinds(tracker.ingest(repo: "o/a", runs: [running(5, attempt: 2)])) == [.started]
     )
     #expect(
-      kinds(tracker.ingest(repo: "o/a", runs: [passed(5, attempt: 2)], filter: .all)) == [
+      kinds(tracker.ingest(repo: "o/a", runs: [passed(5, attempt: 2)])) == [
         .recovered
       ])
   }
 
   @Test func aPassAfterAPassIsNotARecovery() {
     var tracker = RunTracker()
-    _ = tracker.ingest(repo: "o/a", runs: [passed(1)], filter: .all)
-    #expect(tracker.ingest(repo: "o/a", runs: [passed(2)], filter: .all).isEmpty)
+    _ = tracker.ingest(repo: "o/a", runs: [passed(1)])
+    #expect(tracker.ingest(repo: "o/a", runs: [passed(2)]).isEmpty)
   }
 
   @Test func aFailureOnOneBranchDoesNotMakeAPassOnAnotherBranchARecovery() {
     var tracker = RunTracker()
     _ = tracker.ingest(
-      repo: "o/a", runs: [failed(1, branch: "x"), passed(2, branch: "y")], filter: .all)
+      repo: "o/a", runs: [failed(1, branch: "x"), passed(2, branch: "y")])
     let events = tracker.ingest(
-      repo: "o/a", runs: [failed(1, branch: "x"), passed(3, branch: "y")], filter: .all)
+      repo: "o/a", runs: [failed(1, branch: "x"), passed(3, branch: "y")])
     #expect(events.isEmpty)
   }
 
   @Test func usesOnlyTheNewestRunPerKeyOnARawNewestFirstPage() {
     var tracker = RunTracker()
-    _ = tracker.ingest(repo: "o/a", runs: [passed(1)], filter: .all)
+    _ = tracker.ingest(repo: "o/a", runs: [passed(1)])
     let page = [running(3), failed(2), passed(1)]
-    let events = tracker.ingest(repo: "o/a", runs: page, filter: .all)
+    let events = tracker.ingest(repo: "o/a", runs: page)
     #expect(kinds(events) == [.started])
     #expect(events.first?.run.id == 3)
-    #expect(tracker.ingest(repo: "o/a", runs: page, filter: .all).isEmpty)
+    #expect(tracker.ingest(repo: "o/a", runs: page).isEmpty)
     let finished = [failed(3), failed(2), passed(1)]
-    #expect(kinds(tracker.ingest(repo: "o/a", runs: finished, filter: .all)) == [.failed])
+    #expect(kinds(tracker.ingest(repo: "o/a", runs: finished)) == [.failed])
   }
 
   @Test func neverFiresTheSameEventTwice() {
     var tracker = RunTracker()
-    _ = tracker.ingest(repo: "o/a", runs: [passed(1)], filter: .all)
-    #expect(kinds(tracker.ingest(repo: "o/a", runs: [running(2)], filter: .all)) == [.started])
-    #expect(tracker.ingest(repo: "o/a", runs: [running(2)], filter: .all).isEmpty)
-    #expect(tracker.ingest(repo: "o/a", runs: [queued(2)], filter: .all).isEmpty)
-    #expect(tracker.ingest(repo: "o/a", runs: [running(2)], filter: .all).isEmpty)
-    #expect(kinds(tracker.ingest(repo: "o/a", runs: [failed(2)], filter: .all)) == [.failed])
-    #expect(tracker.ingest(repo: "o/a", runs: [failed(2)], filter: .all).isEmpty)
+    _ = tracker.ingest(repo: "o/a", runs: [passed(1)])
+    #expect(kinds(tracker.ingest(repo: "o/a", runs: [running(2)])) == [.started])
+    #expect(tracker.ingest(repo: "o/a", runs: [running(2)]).isEmpty)
+    #expect(tracker.ingest(repo: "o/a", runs: [queued(2)]).isEmpty)
+    #expect(tracker.ingest(repo: "o/a", runs: [running(2)]).isEmpty)
+    #expect(kinds(tracker.ingest(repo: "o/a", runs: [failed(2)])) == [.failed])
+    #expect(tracker.ingest(repo: "o/a", runs: [failed(2)]).isEmpty)
   }
 
   @Test func keepsTheFiredSetBoundedToRunsStillOnThePage() {
     var tracker = RunTracker()
-    _ = tracker.ingest(repo: "o/a", runs: [passed(0)], filter: .all)
+    _ = tracker.ingest(repo: "o/a", runs: [passed(0)])
     for id in 1...100 {
-      _ = tracker.ingest(repo: "o/a", runs: [running(id)], filter: .all)
-      _ = tracker.ingest(repo: "o/a", runs: [failed(id)], filter: .all)
+      _ = tracker.ingest(repo: "o/a", runs: [running(id)])
+      _ = tracker.ingest(repo: "o/a", runs: [failed(id)])
     }
     #expect(tracker.firedCount <= 2)
   }
 
   @Test func pruningOneRepoLeavesTheOthersDeduplicated() {
     var tracker = RunTracker()
-    _ = tracker.ingest(repo: "o/a", runs: [passed(1)], filter: .all)
-    _ = tracker.ingest(repo: "o/b", runs: [passed(2)], filter: .all)
-    #expect(kinds(tracker.ingest(repo: "o/b", runs: [running(3)], filter: .all)) == [.started])
-    _ = tracker.ingest(repo: "o/a", runs: [passed(1)], filter: .all)
-    #expect(tracker.ingest(repo: "o/b", runs: [queued(3)], filter: .all).isEmpty)
-    #expect(tracker.ingest(repo: "o/b", runs: [running(3)], filter: .all).isEmpty)
-  }
-
-  @Test func aChangeOfFilterRebaselinesEveryRepoSilently() {
-    var tracker = RunTracker()
-    _ = tracker.ingest(repo: "o/a", runs: [passed(1)], filter: .defaultBranch)
-    _ = tracker.ingest(repo: "o/b", runs: [passed(2)], filter: .defaultBranch)
-
-    #expect(tracker.ingest(repo: "o/a", runs: [failed(3, branch: "x")], filter: .all).isEmpty)
-    #expect(tracker.ingest(repo: "o/b", runs: [failed(4, branch: "y")], filter: .all).isEmpty)
-
-    #expect(
-      kinds(
-        tracker.ingest(
-          repo: "o/a", runs: [failed(3, branch: "x"), failed(5, branch: "z")], filter: .all))
-        == [.failed])
-  }
-
-  @Test func aFilterChangeNeverRepeatsABannerAlreadyShown() {
-    var tracker = RunTracker()
-    _ = tracker.ingest(repo: "o/a", runs: [passed(1)], filter: .all)
-    #expect(
-      kinds(tracker.ingest(repo: "o/a", runs: [failed(2, branch: "x")], filter: .all)) == [.failed])
-    let reported = [failed(2, branch: "x")]
-    for filter in [BranchFilter.mine, .defaultBranch, .all, .mine, .all] {
-      #expect(tracker.ingest(repo: "o/a", runs: reported, filter: filter).isEmpty)
-      #expect(tracker.ingest(repo: "o/a", runs: reported, filter: filter).isEmpty)
-    }
-  }
-
-  @Test func aFilterChangeKeepsWhatWasAlreadyReportedWhileARunIsInFlight() {
-    var tracker = RunTracker()
-    _ = tracker.ingest(repo: "o/a", runs: [passed(1)], filter: .all)
-    #expect(kinds(tracker.ingest(repo: "o/a", runs: [running(2)], filter: .all)) == [.started])
-    #expect(tracker.ingest(repo: "o/a", runs: [running(2)], filter: .mine).isEmpty)
-    #expect(tracker.ingest(repo: "o/a", runs: [running(2)], filter: .all).isEmpty)
-    #expect(kinds(tracker.ingest(repo: "o/a", runs: [failed(2)], filter: .all)) == [.failed])
+    _ = tracker.ingest(repo: "o/a", runs: [passed(1)])
+    _ = tracker.ingest(repo: "o/b", runs: [passed(2)])
+    #expect(kinds(tracker.ingest(repo: "o/b", runs: [running(3)])) == [.started])
+    _ = tracker.ingest(repo: "o/a", runs: [passed(1)])
+    #expect(tracker.ingest(repo: "o/b", runs: [queued(3)]).isEmpty)
+    #expect(tracker.ingest(repo: "o/b", runs: [running(3)]).isEmpty)
   }
 }

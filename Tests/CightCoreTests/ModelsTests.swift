@@ -26,11 +26,14 @@ struct ModelsTests {
   }
 
   @Test func decodesRecordedRepoUserAndRepoList() throws {
-    let repo = try JSONDecoder.github.decode(Repo.self, from: Fixture.data("repo"))
-    #expect(repo.fullName == "swiftlang/swift-format")
-    #expect(repo.defaultBranch == "main")
     let repos = try JSONDecoder.github.decode([Repo].self, from: Fixture.data("repos"))
     #expect(repos.map(\.name) == ["llvm-project", "swift", "swift-corelibs-foundation"])
+    #expect(repos[0].defaultBranch == "next")
+    #expect(
+      repos.map(\.pushedAt) == [
+        Date(timeIntervalSince1970: 1_793_125_285), Date(timeIntervalSince1970: 1_793_124_397),
+        Date(timeIntervalSince1970: 1_793_122_748),
+      ])
     let viewer = try JSONDecoder.github.decode(Viewer.self, from: Fixture.data("user"))
     #expect(viewer.login == "octocat")
   }

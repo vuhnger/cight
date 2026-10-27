@@ -1,11 +1,5 @@
 import Foundation
 
-public enum BranchFilter: Codable, Sendable, Equatable {
-  case defaultBranch
-  case mine
-  case all
-}
-
 public struct RepoRuns: Sendable {
   public let id: Int
   public let fullName: String
@@ -76,32 +70,25 @@ public enum RunGrouping {
     return newest.values.sorted { $0.id < $1.id }
   }
 
-  public static func filter(
-    _ runs: [WorkflowRun], repoId: Int, defaultBranch: String, viewer: String, mode: BranchFilter
+  public static func mine(
+    _ runs: [WorkflowRun], repoId: Int, defaultBranch: String, viewer: String
   ) -> [WorkflowRun] {
-    func isDefaultBranchOfRepo(_ run: WorkflowRun) -> Bool {
-      run.branch == defaultBranch && run.headRepository?.id == repoId
-    }
-    switch mode {
-    case .all:
-      return runs
-    case .defaultBranch:
-      return runs.filter(isDefaultBranchOfRepo)
-    case .mine:
-      let mine = Set(
-        runs.filter { $0.actor?.login == viewer || $0.triggeringActor?.login == viewer }
-          .map(BranchKey.init))
-      return runs.filter { isDefaultBranchOfRepo($0) || mine.contains(BranchKey($0)) }
+    let mine = Set(
+      runs.filter { $0.actor?.login == viewer || $0.triggeringActor?.login == viewer }
+        .map(BranchKey.init))
+    return runs.filter {
+      ($0.branch == defaultBranch && $0.headRepository?.id == repoId)
+        || mine.contains(BranchKey($0))
     }
   }
 
   public static func groups(
-    _ repos: [RepoRuns], viewer: String, filter mode: BranchFilter
+    _ repos: [RepoRuns], viewer: String
   ) -> [RepoGroup] {
     repos
       .compactMap { repo -> RepoGroup? in
-        let kept = filter(
-          repo.runs, repoId: repo.id, defaultBranch: repo.defaultBranch, viewer: viewer, mode: mode)
+        let kept = mine(
+          repo.runs, repoId: repo.id, defaultBranch: repo.defaultBranch, viewer: viewer)
         let latest = latestRuns(kept).filter {
           $0.conclusion != "skipped" && isLive($0, in: repo)
         }
