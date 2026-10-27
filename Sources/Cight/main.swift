@@ -1,11 +1,14 @@
 import AppKit
 import CightCore
 import OSLog
+import Sparkle
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
   private let log = Logger(subsystem: "com.vuhnger.cight", category: "startup")
   private let monitor = Monitor()
+  private let updater = SPUStandardUpdaterController(
+    startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
   private var status: StatusItemController?
   private var panel: PanelController?
   private var settingsWindow: SettingsWindow?
