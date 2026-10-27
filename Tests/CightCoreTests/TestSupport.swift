@@ -33,7 +33,7 @@ func makeRun(
     "run_attempt": attempt,
     "actor": ["login": actor, "id": 1],
     "triggering_actor": ["login": triggering ?? actor, "id": 1],
-    "head_repository": ["id": headRepo, "full_name": "o/repo\(headRepo)"],
+    "head_repository": ["id": headRepo, "full_name": "owner\(headRepo)/repo"],
   ]
   json["head_branch"] = branch
   json["conclusion"] = conclusion

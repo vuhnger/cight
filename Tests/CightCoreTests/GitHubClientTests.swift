@@ -18,8 +18,10 @@ private func makeClient(
   StubProtocol.install(handler)
   let calls = Counter()
   let queue = Mutex(tokens)
+  let configuration = URLSessionConfiguration.ephemeral
+  configuration.protocolClasses = [StubProtocol.self]
   let client = GitHubClient(
-    session: GitHubClient.makeSession(protocolClasses: [StubProtocol.self]),
+    configuration: configuration,
     tokenProvider: {
       calls.increment()
       return queue.withLock { $0.count > 1 ? $0.removeFirst() : $0[0] }
@@ -34,13 +36,6 @@ private func ok(_ fixture: String, headers: [String: String] = [:]) -> StubReply
 
 @Suite(.serialized)
 struct GitHubClientTests {
-  @Test func sessionIsEphemeralWithoutCacheAndFifteenSecondTimeout() {
-    let configuration = GitHubClient.makeSession().configuration
-    #expect(configuration.urlCache == nil)
-    #expect(configuration.requestCachePolicy == .reloadIgnoringLocalCacheData)
-    #expect(configuration.timeoutIntervalForRequest == 15)
-  }
-
   @Test func eachRequestHasAFifteenSecondTimeoutAndIgnoresLocalCaches() async throws {
     let (client, _) = makeClient { _ in ok("user") }
     _ = try await client.viewer()

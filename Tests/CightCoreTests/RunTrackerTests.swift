@@ -125,6 +125,26 @@ struct RunTrackerTests {
     #expect(tracker.ingest(repo: "o/a", runs: [failed(2)], filter: .all).isEmpty)
   }
 
+  @Test func keepsTheFiredSetBoundedToRunsStillOnThePage() {
+    var tracker = RunTracker()
+    _ = tracker.ingest(repo: "o/a", runs: [passed(0)], filter: .all)
+    for id in 1...100 {
+      _ = tracker.ingest(repo: "o/a", runs: [running(id)], filter: .all)
+      _ = tracker.ingest(repo: "o/a", runs: [failed(id)], filter: .all)
+    }
+    #expect(tracker.firedCount <= 2)
+  }
+
+  @Test func pruningOneRepoLeavesTheOthersDeduplicated() {
+    var tracker = RunTracker()
+    _ = tracker.ingest(repo: "o/a", runs: [passed(1)], filter: .all)
+    _ = tracker.ingest(repo: "o/b", runs: [passed(2)], filter: .all)
+    #expect(kinds(tracker.ingest(repo: "o/b", runs: [running(3)], filter: .all)) == [.started])
+    _ = tracker.ingest(repo: "o/a", runs: [passed(1)], filter: .all)
+    #expect(tracker.ingest(repo: "o/b", runs: [queued(3)], filter: .all).isEmpty)
+    #expect(tracker.ingest(repo: "o/b", runs: [running(3)], filter: .all).isEmpty)
+  }
+
   @Test func aChangeOfFilterRebaselinesEveryRepoSilently() {
     var tracker = RunTracker()
     _ = tracker.ingest(repo: "o/a", runs: [passed(1)], filter: .defaultBranch)

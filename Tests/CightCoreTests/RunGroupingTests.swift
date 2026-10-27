@@ -28,7 +28,8 @@ struct RunGroupingTests {
       makeRun(id: 1, branch: "main"),
       makeRun(id: 2, branch: "feature", actor: "me"),
     ]
-    let kept = RunGrouping.filter(runs, defaultBranch: "main", viewer: "me", mode: .defaultBranch)
+    let kept = RunGrouping.filter(
+      runs, repoId: 1, defaultBranch: "main", viewer: "me", mode: .defaultBranch)
     #expect(kept.map(\.id) == [1])
   }
 
@@ -40,22 +41,58 @@ struct RunGroupingTests {
       makeRun(id: 4, branch: "theirs", actor: "other"),
       makeRun(id: 5, branch: "mine", actor: "other"),
     ]
-    let kept = RunGrouping.filter(runs, defaultBranch: "main", viewer: "me", mode: .mine)
+    let kept = RunGrouping.filter(runs, repoId: 1, defaultBranch: "main", viewer: "me", mode: .mine)
     #expect(Set(kept.map(\.id)) == [1, 2, 3, 5])
+  }
+
+  @Test func aForkBranchNamedLikeTheDefaultBranchIsNotTheDefaultBranch() {
+    let runs = [
+      makeRun(id: 1, branch: "main", headRepo: 1),
+      makeRun(id: 2, branch: "main", conclusion: "failure", actor: "stranger", headRepo: 2),
+    ]
+    for mode in [BranchFilter.defaultBranch, .mine] {
+      let kept = RunGrouping.filter(
+        runs, repoId: 1, defaultBranch: "main", viewer: "me", mode: mode)
+      #expect(kept.map(\.id) == [1])
+    }
+  }
+
+  @Test func myForkBranchesAreMineButOtherForksWithTheSameBranchNameAreNot() {
+    let runs = [
+      makeRun(id: 1, branch: "fix", actor: "me", headRepo: 2),
+      makeRun(id: 2, branch: "fix", actor: "stranger", headRepo: 3),
+    ]
+    let kept = RunGrouping.filter(
+      runs, repoId: 1, defaultBranch: "main", viewer: "me", mode: .mine)
+    #expect(kept.map(\.id) == [1])
+  }
+
+  @Test func aFailingForkMainDoesNotTurnTheRepoRedUnderTheDefaultBranchFilter() {
+    let repo = RepoRuns(
+      id: 1, fullName: "o/r", defaultBranch: "main",
+      runs: [
+        makeRun(id: 1, branch: "main", created: 10, headRepo: 1),
+        makeRun(id: 2, branch: "main", conclusion: "failure", created: 20, actor: "x", headRepo: 2),
+      ])
+    let own = RunGrouping.groups([repo], viewer: "me", filter: .defaultBranch)
+    #expect(own.first?.state == .passed)
+    let all = RunGrouping.groups([repo], viewer: "me", filter: .all)
+    #expect(all.first?.branches.map(\.branch) == ["owner2:main", "main"])
+    #expect(all.first?.branches.map(\.state) == [.failed, .passed])
   }
 
   @Test func allKeepsEveryBranch() {
     let runs = [makeRun(id: 1, branch: "main"), makeRun(id: 2, branch: "x", actor: "other")]
-    let kept = RunGrouping.filter(runs, defaultBranch: "main", viewer: "me", mode: .all)
+    let kept = RunGrouping.filter(runs, repoId: 1, defaultBranch: "main", viewer: "me", mode: .all)
     #expect(kept.count == 2)
   }
 
   @Test func ordersReposBranchesAndRunsByUrgencyThenRecency() {
     let passedRepo = RepoRuns(
-      fullName: "o/passed", defaultBranch: "main",
+      id: 1, fullName: "o/passed", defaultBranch: "main",
       runs: [makeRun(id: 1, created: 500)])
     let failedRepo = RepoRuns(
-      fullName: "o/failed", defaultBranch: "main",
+      id: 1, fullName: "o/failed", defaultBranch: "main",
       runs: [
         makeRun(id: 2, workflow: 1, branch: "pass", created: 900),
         makeRun(id: 3, workflow: 1, branch: "old-fail", conclusion: "failure", created: 100),
@@ -63,7 +100,7 @@ struct RunGroupingTests {
         makeRun(id: 5, workflow: 2, branch: "old-fail", created: 50),
       ])
     let runningRepo = RepoRuns(
-      fullName: "o/running", defaultBranch: "main",
+      id: 1, fullName: "o/running", defaultBranch: "main",
       runs: [makeRun(id: 6, status: "in_progress", conclusion: nil, created: 50)])
 
     let groups = RunGrouping.groups(
@@ -79,16 +116,16 @@ struct RunGroupingTests {
 
   @Test func recencyBreaksTiesBetweenRepos() {
     let older = RepoRuns(
-      fullName: "o/older", defaultBranch: "main", runs: [makeRun(id: 1, created: 0)])
+      id: 1, fullName: "o/older", defaultBranch: "main", runs: [makeRun(id: 1, created: 0)])
     let newer = RepoRuns(
-      fullName: "o/newer", defaultBranch: "main", runs: [makeRun(id: 2, created: 60)])
+      id: 1, fullName: "o/newer", defaultBranch: "main", runs: [makeRun(id: 2, created: 60)])
     let groups = RunGrouping.groups([older, newer], viewer: "me", filter: .all)
     #expect(groups.map(\.fullName) == ["o/newer", "o/older"])
   }
 
   @Test func appliesTheFilterBeforeGrouping() {
     let repo = RepoRuns(
-      fullName: "o/r", defaultBranch: "main",
+      id: 1, fullName: "o/r", defaultBranch: "main",
       runs: [
         makeRun(id: 1, branch: "main"),
         makeRun(id: 2, branch: "other", conclusion: "failure", actor: "x"),
