@@ -5,10 +5,12 @@ import SwiftUI
 @MainActor
 final class SettingsWindow: NSObject, NSWindowDelegate {
   private let notifier: Notifier
+  private let updates: UpdateChecker
   private let launchAtLogin = LaunchAtLogin()
   private var window: NSWindow?
 
-  init(notifier: Notifier) {
+  init(notifier: Notifier, updates: UpdateChecker) {
+    self.updates = updates
     self.notifier = notifier
     super.init()
   }
@@ -34,7 +36,7 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     window.isReleasedWhenClosed = false
     window.delegate = self
     let controller = NSHostingController(
-      rootView: SettingsView(notifier: notifier, launchAtLogin: launchAtLogin))
+      rootView: SettingsView(notifier: notifier, updates: updates, launchAtLogin: launchAtLogin))
     controller.sizingOptions = .preferredContentSize
     window.contentViewController = controller
     window.center()

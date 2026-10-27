@@ -4,10 +4,11 @@ import UserNotifications
 
 struct SettingsView: View {
   var notifier: Notifier
+  var updates: UpdateChecker
   var launchAtLogin: LaunchAtLogin
 
   var body: some View {
-    GeneralPane(notifier: notifier, launchAtLogin: launchAtLogin)
+    GeneralPane(notifier: notifier, updates: updates, launchAtLogin: launchAtLogin)
       .padding(20)
       .frame(width: 520, alignment: .top)
   }
@@ -15,6 +16,7 @@ struct SettingsView: View {
 
 private struct GeneralPane: View {
   @Bindable var notifier: Notifier
+  var updates: UpdateChecker
   var launchAtLogin: LaunchAtLogin
 
   var body: some View {
@@ -41,6 +43,9 @@ private struct GeneralPane: View {
       Divider()
 
       Text("Show or hide the panel with Ctrl+Opt+Cmd+G.").foregroundStyle(.secondary)
+
+      Button("Check for updates") { updates.check() }
+        .disabled(!updates.canCheck)
 
       Button("Quit Cight") { NSApplication.shared.terminate(nil) }
         .frame(maxWidth: .infinity, alignment: .trailing)
