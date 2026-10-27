@@ -35,6 +35,10 @@ public struct RepoRef: Decodable, Sendable, Equatable {
   public let fullName: String?
 }
 
+public struct PullRequestRef: Decodable, Sendable, Equatable {
+  public let number: Int
+}
+
 public struct WorkflowRun: Decodable, Sendable, Equatable, Identifiable {
   public let id: Int
   public let workflowId: Int
@@ -45,7 +49,7 @@ public struct WorkflowRun: Decodable, Sendable, Equatable, Identifiable {
   public let conclusion: String?
   public let event: String?
   public let headBranch: String?
-  public let runNumber: Int?
+  public let pullRequests: [PullRequestRef]?
   public let runAttempt: Int?
   public let runStartedAt: Date?
   public let updatedAt: Date?
@@ -60,6 +64,10 @@ public struct WorkflowRun: Decodable, Sendable, Equatable, Identifiable {
 
   public var branch: String {
     headBranch ?? "unknown"
+  }
+
+  public var pullRequestNumber: Int? {
+    pullRequests?.first?.number
   }
 
   public var activityDate: Date {
