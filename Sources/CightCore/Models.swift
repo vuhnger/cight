@@ -19,11 +19,9 @@ public struct Repo: Decodable, Sendable, Equatable, Identifiable {
   public let name: String
   public let fullName: String
   public let defaultBranch: String
-  public let pushedAt: Date?
 }
 
 public struct Account: Decodable, Sendable, Equatable {
-  public let id: Int?
   public let login: String
 }
 
@@ -41,7 +39,6 @@ public struct WorkflowRun: Decodable, Sendable, Equatable, Identifiable {
   public let conclusion: String?
   public let event: String?
   public let headBranch: String?
-  public let headSha: String?
   public let runNumber: Int?
   public let runAttempt: Int?
   public let runStartedAt: Date?

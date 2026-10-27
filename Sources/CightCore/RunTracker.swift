@@ -31,6 +31,7 @@ public struct RunTracker: Sendable {
   }
 
   private struct Fired: Hashable {
+    let repo: String
     let kind: RunEvent.Kind
     let runId: Int
     let attempt: Int?
@@ -41,6 +42,8 @@ public struct RunTracker: Sendable {
   private var seen: [Key: Seen] = [:]
   private var lastSettled: [Key: RunState] = [:]
   private var fired: Set<Fired> = []
+
+  var firedCount: Int { fired.count }
 
   public init() {}
 
@@ -54,8 +57,11 @@ public struct RunTracker: Sendable {
       filter = newFilter
     }
     let isBaseline = baselinedRepos.insert(repo).inserted
+    let latest = RunGrouping.latestRuns(runs)
+    let present = Set(latest.map(\.id))
+    fired = fired.filter { $0.repo != repo || present.contains($0.runId) }
     var events: [RunEvent] = []
-    for run in runs {
+    for run in latest {
       let key = Key(
         repo: repo, workflowId: run.workflowId, branch: run.headBranch,
         headRepositoryId: run.headRepository?.id)
@@ -68,7 +74,9 @@ public struct RunTracker: Sendable {
       guard !isBaseline, !unchanged, let kind = kind(of: run, settledBefore: settledBefore) else {
         continue
       }
-      if fired.insert(Fired(kind: kind, runId: run.id, attempt: run.runAttempt)).inserted {
+      if fired.insert(Fired(repo: repo, kind: kind, runId: run.id, attempt: run.runAttempt))
+        .inserted
+      {
         events.append(RunEvent(kind: kind, repo: repo, run: run))
       }
     }

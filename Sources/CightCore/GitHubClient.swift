@@ -12,6 +12,9 @@ public enum GitHubError: Error, Equatable, Sendable {
 public actor GitHubClient {
   private static let baseURL = "https://api.github.com/"
   private static let apiHost = "api.github.com"
+  private static let timeout: TimeInterval = 15
+  private static let pathSegmentCharacters = CharacterSet(
+    charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-")
 
   private let session: URLSession
   private let tokenProvider: @Sendable () async -> String?
@@ -20,24 +23,17 @@ public actor GitHubClient {
   private var cache: [URL: (etag: String, body: Data)] = [:]
 
   public init(
-    session: URLSession = GitHubClient.makeSession(),
+    configuration: URLSessionConfiguration = .ephemeral,
     tokenProvider: @escaping @Sendable () async -> String?,
     now: @escaping @Sendable () -> Date = { Date() }
   ) {
-    self.session = session
+    let hardened = configuration.copy() as! URLSessionConfiguration
+    hardened.urlCache = nil
+    hardened.requestCachePolicy = .reloadIgnoringLocalCacheData
+    hardened.timeoutIntervalForRequest = Self.timeout
+    self.session = URLSession(configuration: hardened)
     self.tokenProvider = tokenProvider
     self.now = now
-  }
-
-  public static func makeSession(protocolClasses: [AnyClass] = []) -> URLSession {
-    let configuration = URLSessionConfiguration.ephemeral
-    configuration.urlCache = nil
-    configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
-    configuration.timeoutIntervalForRequest = 15
-    if !protocolClasses.isEmpty {
-      configuration.protocolClasses = protocolClasses
-    }
-    return URLSession(configuration: configuration)
   }
 
   public func viewer() async throws -> Viewer {
@@ -49,16 +45,25 @@ public actor GitHubClient {
   }
 
   public func repo(owner: String, name: String) async throws -> Repo {
-    try await get("repos/\(owner)/\(name)")
+    try await get("repos/\(try segment(owner))/\(try segment(name))")
   }
 
   public func runs(owner: String, name: String) async throws -> [WorkflowRun] {
-    let page: RunsPage = try await get("repos/\(owner)/\(name)/actions/runs?per_page=100")
+    let path = "repos/\(try segment(owner))/\(try segment(name))/actions/runs?per_page=100"
+    let page: RunsPage = try await get(path)
     return page.runs
   }
 
+  private func segment(_ value: String) throws -> String {
+    let isValid =
+      !value.isEmpty && value != "." && value != ".."
+      && value.unicodeScalars.allSatisfy(Self.pathSegmentCharacters.contains)
+    guard isValid else { throw GitHubError.notFound }
+    return value
+  }
+
   private func get<Value: Decodable>(_ path: String) async throws -> Value {
-    let url = URL(string: Self.baseURL + path)!
+    guard let url = URL(string: Self.baseURL + path) else { throw GitHubError.notFound }
     let body = try await body(for: url)
     do {
       return try JSONDecoder.github.decode(Value.self, from: body)
@@ -92,7 +97,8 @@ public actor GitHubClient {
   }
 
   private func fetch(_ url: URL, token: String) async throws -> Data {
-    var request = URLRequest(url: url)
+    var request = URLRequest(
+      url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: Self.timeout)
     request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
     request.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
     request.setValue("cight", forHTTPHeaderField: "User-Agent")
@@ -115,9 +121,7 @@ public actor GitHubClient {
 
     switch http.statusCode {
     case 200..<300:
-      if let etag = http.value(forHTTPHeaderField: "ETag") {
-        cache[url] = (etag, data)
-      }
+      cache[url] = http.value(forHTTPHeaderField: "ETag").map { ($0, data) }
       return data
     case 304:
       guard let cached = cache[url] else { throw GitHubError.server(304) }
@@ -125,6 +129,7 @@ public actor GitHubClient {
     case 401:
       throw GitHubError.unauthorized
     case 404:
+      cache[url] = nil
       throw GitHubError.notFound
     case 403, 429:
       if let resumeAt = rateLimitResume(http) { throw GitHubError.rateLimited(resumeAt: resumeAt) }

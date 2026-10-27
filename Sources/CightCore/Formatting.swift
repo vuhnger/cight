@@ -1,15 +1,21 @@
 import Foundation
 
 public enum Formatting {
+  private static let secondsLimit = 1e12
+
+  private static func wholeSeconds(_ seconds: TimeInterval) -> Int {
+    seconds.isFinite ? Int(min(max(seconds, -secondsLimit), secondsLimit)) : 0
+  }
+
   public static func duration(_ seconds: TimeInterval) -> String {
-    let total = max(0, Int(seconds))
+    let total = max(0, wholeSeconds(seconds))
     if total < 60 { return "\(total)s" }
     if total < 3600 { return "\(total / 60)m \(total % 60)s" }
     return "\(total / 3600)h \(total % 3600 / 60)m"
   }
 
   public static func relative(from date: Date, now: Date) -> String {
-    let seconds = Int(now.timeIntervalSince(date))
+    let seconds = wholeSeconds(now.timeIntervalSince(date))
     switch seconds {
     case ..<5: return "just now"
     case ..<60: return "\(seconds)s ago"
@@ -20,10 +26,11 @@ public enum Formatting {
   }
 
   public static func remaining(_ secondsLeft: TimeInterval) -> String {
-    switch secondsLeft {
-    case ...(-60): return "+\(Int(-secondsLeft) / 60)m"
+    let seconds = wholeSeconds(secondsLeft)
+    switch seconds {
+    case ...(-60): return "+\(-seconds / 60)m"
     case ..<60: return "<1m left"
-    default: return "\(Int(secondsLeft) / 60)m left"
+    default: return "\(seconds / 60)m left"
     }
   }
 

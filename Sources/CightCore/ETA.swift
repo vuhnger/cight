@@ -19,8 +19,8 @@ public enum ETA {
       runs
       .filter { $0.workflowId == run.workflowId && $0.event == run.event && $0.state == .passed }
       .sorted { $0.createdAt > $1.createdAt }
-      .compactMap(duration)
       .prefix(maxSamples)
+      .compactMap(duration)
       .sorted()
     guard !durations.isEmpty else { return nil }
     let middle = durations.count / 2
@@ -31,8 +31,11 @@ public enum ETA {
   }
 
   public static func progress(elapsed: TimeInterval, median: TimeInterval) -> RunProgress {
-    RunProgress(
-      fraction: min(1, elapsed / median),
+    guard median > 0, median.isFinite, elapsed.isFinite else {
+      return RunProgress(fraction: 0, isOverdue: false, overdueBy: 0)
+    }
+    return RunProgress(
+      fraction: min(1, max(0, elapsed / median)),
       isOverdue: elapsed > median,
       overdueBy: max(0, elapsed - median))
   }
