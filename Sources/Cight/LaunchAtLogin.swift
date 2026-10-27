@@ -100,7 +100,7 @@ final class LaunchAtLogin {
 
   nonisolated static func startAgent(freshFirst: Bool) -> Bool {
     for attempt in 0..<2 {
-      if freshFirst || attempt > 0 { try? registerFresh() }
+      if freshFirst && attempt == 0 { try? registerFresh() }
       _ = kickstart()
       let outcome = InstanceLock.waitForHolder(
         at: AppInstance.lockURL, timeout: StartupPlan.agentStartTimeout)
