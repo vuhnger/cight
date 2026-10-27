@@ -54,6 +54,10 @@ public actor GitHubClient {
     return page.runs
   }
 
+  public func branches(owner: String, name: String) async throws -> Set<String>? {
+    nil
+  }
+
   private func segment(_ value: String) throws -> String {
     let isValid =
       !value.isEmpty && value != "." && value != ".."

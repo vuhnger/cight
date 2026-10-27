@@ -11,12 +11,17 @@ public struct RepoRuns: Sendable {
   public let fullName: String
   public let defaultBranch: String
   public let runs: [WorkflowRun]
+  public let liveBranches: Set<String>?
 
-  public init(id: Int, fullName: String, defaultBranch: String, runs: [WorkflowRun]) {
+  public init(
+    id: Int, fullName: String, defaultBranch: String, runs: [WorkflowRun],
+    liveBranches: Set<String>? = nil
+  ) {
     self.id = id
     self.fullName = fullName
     self.defaultBranch = defaultBranch
     self.runs = runs
+    self.liveBranches = liveBranches
   }
 }
 

@@ -177,6 +177,7 @@ struct PanelMachineTests {
 
   @Test func closingByClickWhilePointerRestsOnTheIconDoesNotReopen() {
     var machine = PanelMachine()
+    _ = machine.handle(onIcon)
     _ = machine.handle(.iconClick)
     _ = machine.handle(.iconClick)
     #expect(machine.handle(onIcon).isEmpty)
@@ -202,13 +203,31 @@ struct PanelMachineTests {
     #expect(machine.handle(.timer(dwell!)) == [.show(pinned: false)])
   }
 
-  @Test func hoverReopensAfterHotkeyCloseOnceThePointerHasLeftAndReturned() {
+  @Test func hoverWorksAfterAHotkeyOpenAndCloseWhileThePointerWasAway() {
+    var machine = PanelMachine()
+    _ = machine.handle(away)
+    _ = machine.handle(.hotkey)
+    _ = machine.handle(.hotkey)
+    #expect(timer(machine.handle(onIcon))?.kind == .dwell)
+    #expect(machine.phase == .opening)
+  }
+
+  @Test func hoverWorksAfterAnEscapeCloseWhileThePointerWasAway() {
     var machine = PanelMachine()
     _ = machine.handle(.hotkey)
+    _ = machine.handle(away)
+    _ = machine.handle(.escape)
+    #expect(timer(machine.handle(onIcon))?.kind == .dwell)
+  }
+
+  @Test func theMachineRemembersTheIconStateSeenWhilePinned() {
+    var machine = PanelMachine()
+    _ = machine.handle(.hotkey)
+    _ = machine.handle(onIcon)
     _ = machine.handle(.hotkey)
     #expect(machine.handle(onIcon).isEmpty)
+    #expect(machine.phase == .hidden)
     _ = machine.handle(away)
-    _ = machine.handle(onIcon)
-    #expect(machine.phase == .opening)
+    #expect(timer(machine.handle(onIcon)) != nil)
   }
 }

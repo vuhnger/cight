@@ -102,6 +102,38 @@ struct GitHubClientTests {
       StubProtocol.requests.first?.url?.path == "/repos/Some-Org_1/swift.format-2/actions/runs")
   }
 
+  @Test func branchesReturnTheNamesFromTheRecordedList() async throws {
+    let (client, _) = makeClient { _ in ok("branches") }
+    let names = try await client.branches(owner: "swiftlang", name: "swift-format")
+    #expect(
+      names == [
+        "MaxDesiatov-patch-1", "add-post-merge-support",
+        "automerge/merge-main-2025-04-18_22-51", "automerge/merge-main-2025-12-15_09-13",
+      ])
+    #expect(
+      StubProtocol.requests.first?.url?.absoluteString
+        == "https://api.github.com/repos/swiftlang/swift-format/branches?per_page=100")
+  }
+
+  @Test func aFullPageOfBranchesMeansTheListIsIncompleteAndUnknown() async throws {
+    let page = (0..<100).map { #"{"name":"b\#($0)"}"# }.joined(separator: ",")
+    let (client, _) = makeClient { _ in
+      StubReply(status: 200, body: Data("[\(page)]".utf8))
+    }
+    #expect(try await client.branches(owner: "o", name: "r") == nil)
+  }
+
+  @Test func branchesUseTheETagCache() async throws {
+    let (client, _) = makeClient { request in
+      request.value(forHTTPHeaderField: "If-None-Match") == "\"b1\""
+        ? StubReply(status: 304) : ok("branches", headers: ["ETag": "\"b1\""])
+    }
+    let first = try await client.branches(owner: "o", name: "r")
+    let second = try await client.branches(owner: "o", name: "r")
+    #expect(first == second)
+    #expect(first?.count == 4)
+  }
+
   @Test func sendsRequiredHeaders() async throws {
     let (client, _) = makeClient { _ in ok("user") }
     _ = try await client.viewer()
