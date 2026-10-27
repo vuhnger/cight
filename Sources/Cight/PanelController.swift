@@ -95,7 +95,7 @@ final class PanelController: NSObject {
     }
     for effect in machine.handle(input) {
       switch effect {
-      case .show: show()
+      case .show(let pinned): show(pinned: pinned)
       case .hide: hide()
       case .cancelTimer: timer?.cancel()
       case .schedule(let scheduled):
@@ -119,7 +119,7 @@ final class PanelController: NSObject {
     panel.alphaValue = 1
   }
 
-  private func show() {
+  private func show(pinned: Bool) {
     if !panel.isVisible {
       resize()
       position()
@@ -129,7 +129,7 @@ final class PanelController: NSObject {
       monitor.panelVisibilityChanged(true)
       measureFirstFrame()
     }
-    panel.makeKey()
+    if pinned { panel.makeKey() }
   }
 
   private func hide() {

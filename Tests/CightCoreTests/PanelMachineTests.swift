@@ -230,4 +230,22 @@ struct PanelMachineTests {
     _ = machine.handle(away)
     #expect(timer(machine.handle(onIcon)) != nil)
   }
+
+  @Test func aHoverOpenedPanelNeverRequestsKeyFocus() {
+    var machine = PanelMachine()
+    var effects = machine.handle(onIcon)
+    let dwell = timer(effects)!
+    effects += machine.handle(.timer(dwell))
+    effects += machine.handle(onPanel)
+    effects += machine.handle(away)
+    #expect(!effects.contains(.show(pinned: true)))
+    #expect(effects.contains(.show(pinned: false)))
+  }
+
+  @Test func onlyClickAndHotkeyRequestKeyFocus() {
+    var click = PanelMachine()
+    #expect(click.handle(.iconClick) == [.show(pinned: true)])
+    var hotkey = PanelMachine()
+    #expect(hotkey.handle(.hotkey) == [.show(pinned: true)])
+  }
 }
