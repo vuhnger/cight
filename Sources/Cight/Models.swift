@@ -1,3 +1,4 @@
+import AppKit
 import CightCore
 import Foundation
 import Observation
@@ -16,6 +17,7 @@ final class RunRowModel: Identifiable {
   private(set) var activityAt: Date
   private(set) var median: TimeInterval?
   private(set) var samples: Int
+  private static let workflowWidthCap: CGFloat = 150
 
   init(run: WorkflowRun, eta: ETAEstimate?) {
     id = run.id
@@ -44,6 +46,13 @@ final class RunRowModel: Identifiable {
     set(\.activityAt, run.activityDate)
     set(\.median, eta?.median)
     set(\.samples, eta?.sampleCount ?? 0)
+  }
+
+  var workflowWidth: CGFloat {
+    let size = NSFont.preferredFont(forTextStyle: .callout).pointSize
+    let font = NSFont.systemFont(ofSize: size, weight: .medium)
+    let measured = NSAttributedString(string: workflow, attributes: [.font: font]).size().width
+    return min(Self.workflowWidthCap, ceil(measured) + 2)
   }
 
   func progress(at now: Date) -> RunProgress? {
