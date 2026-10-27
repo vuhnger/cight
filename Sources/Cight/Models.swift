@@ -105,13 +105,13 @@ final class RepoModel: Identifiable {
     self.name = name
   }
 
+  var hasActiveRun: Bool {
+    branches.contains { $0.rows.contains { $0.state == .running || $0.state == .queued } }
+  }
+
   var expanded: Bool {
-    guard problem == nil else { return false }
-    if let userExpanded { return userExpanded }
-    switch glyph {
-    case .failed, .running, .overdue, .queued: return true
-    default: return false
-    }
+    RepoCardRules.isExpanded(
+      hasActiveRun: hasActiveRun, userChoice: userExpanded, hasProblem: problem != nil)
   }
 
   func toggle() {
