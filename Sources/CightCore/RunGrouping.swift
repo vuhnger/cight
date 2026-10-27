@@ -1,6 +1,6 @@
 import Foundation
 
-public enum BranchFilter: Sendable, Equatable {
+public enum BranchFilter: Codable, Sendable, Equatable {
   case defaultBranch
   case mine
   case all
