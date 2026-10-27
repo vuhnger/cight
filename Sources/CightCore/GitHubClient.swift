@@ -13,6 +13,7 @@ public actor GitHubClient {
   private static let baseURL = "https://api.github.com/"
   private static let apiHost = "api.github.com"
   private static let timeout: TimeInterval = 15
+  private static let pageSize = 100
   private static let pathSegmentCharacters = CharacterSet(
     charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-")
 
@@ -52,6 +53,12 @@ public actor GitHubClient {
     let path = "repos/\(try segment(owner))/\(try segment(name))/actions/runs?per_page=100"
     let page: RunsPage = try await get(path)
     return page.runs
+  }
+
+  public func branches(owner: String, name: String) async throws -> Set<String>? {
+    let path = "repos/\(try segment(owner))/\(try segment(name))/branches?per_page=100"
+    let page: [Branch] = try await get(path)
+    return page.count < Self.pageSize ? Set(page.map(\.name)) : nil
   }
 
   private func segment(_ value: String) throws -> String {

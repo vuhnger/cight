@@ -91,4 +91,17 @@ struct PollPolicyTests {
   @Test func wakeFromSleepStillRespectsARateLimit() {
     #expect(delay(after: .rateLimited(resumeAt: at(90)), wokeFromSleep: true) == 90)
   }
+
+  @Test func aForcedPollNeverOverridesARateLimitOrABackoff() {
+    #expect(!PollPolicy.allowsForcedPoll(after: .rateLimited(resumeAt: t0)))
+    #expect(!PollPolicy.allowsForcedPoll(after: .transport(.timedOut)))
+    #expect(!PollPolicy.allowsForcedPoll(after: .server(502)))
+    #expect(!PollPolicy.allowsForcedPoll(after: .decoding))
+  }
+
+  @Test func aForcedPollIsAllowedWhenHealthySignedOutOrWhenARepoIsGone() {
+    #expect(PollPolicy.allowsForcedPoll(after: nil))
+    #expect(PollPolicy.allowsForcedPoll(after: .unauthorized))
+    #expect(PollPolicy.allowsForcedPoll(after: .notFound))
+  }
 }
