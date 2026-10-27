@@ -19,13 +19,13 @@ final class SettingsModel {
   private(set) var loadMessage: String?
   private(set) var addMessage: String?
 
-  private let store: WatchStore
+  private let monitor: Monitor
   private let client: GitHubClient
 
-  init(store: WatchStore, client: GitHubClient) {
-    self.store = store
+  init(monitor: Monitor, client: GitHubClient) {
+    self.monitor = monitor
     self.client = client
-    watched = store.repos()
+    watched = monitor.watched
   }
 
   var results: [Repo] {
@@ -58,7 +58,7 @@ final class SettingsModel {
   }
 
   func add(_ repo: Repo) {
-    finish(RepoAdder.add(repo: repo, store: { self.store.add($0) }))
+    finish(RepoAdder.add(repo: repo, store: { self.monitor.add($0) }))
   }
 
   func addTyped() async {
@@ -66,24 +66,24 @@ final class SettingsModel {
     defer { isAdding = false }
     let result = await RepoAdder.add(
       input: query, fetch: { try await self.client.repo(owner: $0, name: $1) },
-      store: { self.store.add($0) })
+      store: { self.monitor.add($0) })
     finish(result)
   }
 
   func remove(_ repo: WatchedRepo) {
-    store.remove(repo.owner, repo.name)
-    watched = store.repos()
+    monitor.remove(owner: repo.owner, name: repo.name)
+    watched = monitor.watched
     addMessage = nil
   }
 
   func setFilter(_ filter: BranchFilter, for repo: WatchedRepo) {
-    store.setFilter(filter, repo.owner, repo.name)
-    watched = store.repos()
+    monitor.setFilter(filter, owner: repo.owner, name: repo.name)
+    watched = monitor.watched
   }
 
   private func finish(_ result: AddRepoResult) {
     addMessage = UserMessage.text(for: result, now: Date())
-    watched = store.repos()
+    watched = monitor.watched
     if case .added = result { query = "" }
   }
 }
