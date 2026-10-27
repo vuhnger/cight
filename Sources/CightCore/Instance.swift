@@ -44,6 +44,17 @@ public final class InstanceLock: @unchecked Sendable {
     }
   }
 
+  public static func waitForHolder(at url: URL, timeout: TimeInterval) -> LockOutcome {
+    let deadline = Date().addingTimeInterval(timeout)
+    while true {
+      let attempt = acquire(at: url)
+      guard attempt.outcome == .acquired else { return attempt.outcome }
+      attempt.lock?.release()
+      guard Date() < deadline else { return .acquired }
+      usleep(pollInterval)
+    }
+  }
+
   public func release() {
     mutex.lock()
     defer { mutex.unlock() }
@@ -62,6 +73,7 @@ public enum StartupPlan: Sendable, Equatable {
   case exitFailure
 
   public static let waitTimeout: TimeInterval = 10
+  public static let agentStartTimeout: TimeInterval = 5
 
   public static func decide(
     lock: LockOutcome, startedByAgent: Bool, waitsForLock: Bool, agentEnabled: Bool

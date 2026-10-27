@@ -63,6 +63,22 @@ struct InstanceLockTests {
     #expect(attempt.lock == nil)
   }
 
+  @Test func waitingForAHolderSeesOneThatAppearsLate() {
+    let url = lockURL()
+    nonisolated(unsafe) var started: InstanceLock?
+    DispatchQueue.global().asyncAfter(deadline: .now() + 0.3) {
+      started = InstanceLock.acquire(at: url).lock
+    }
+    #expect(InstanceLock.waitForHolder(at: url, timeout: 3) == .held)
+    started?.release()
+  }
+
+  @Test func waitingForAHolderThatNeverComesLeavesTheLockFree() {
+    let url = lockURL()
+    #expect(InstanceLock.waitForHolder(at: url, timeout: 0.3) == .acquired)
+    #expect(InstanceLock.acquire(at: url).outcome == .acquired)
+  }
+
   @Test func contentionIsReportedAsHeld() throws {
     let url = lockURL()
     let holder = try #require(InstanceLock.acquire(at: url).lock)

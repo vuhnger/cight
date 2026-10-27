@@ -22,16 +22,12 @@ final class LaunchAtLogin {
   }
 
   func set(_ enabled: Bool) {
-    if enabled {
-      enable()
-    } else {
-      Task { await disable() }
-    }
+    Task { await enabled ? enable() : disable() }
   }
 
-  private func enable() {
+  private func enable() async {
     do {
-      try? service.unregister()
+      try? await service.unregister()
       try service.register()
       error = nil
       LaunchAtLogin.currentIdentity()?.save(to: .standard)
@@ -98,8 +94,14 @@ final class LaunchAtLogin {
         agentEnabled: service.status == .enabled, stored: AgentIdentity.load(from: defaults),
         current: current)
     else { return }
-    try? service.unregister()
-    try? service.register()
+    let finished = DispatchSemaphore(value: 0)
+    Task.detached {
+      let fresh = SMAppService.agent(plistName: LaunchAgent.plistName)
+      try? await fresh.unregister()
+      try? fresh.register()
+      finished.signal()
+    }
+    finished.wait()
     current.save(to: defaults)
   }
 

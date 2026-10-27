@@ -38,10 +38,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         exit(1)
       }
     case .kickstartThenExit:
-      if LaunchAtLogin.kickstart() { exit(0) }
-      log.error("Could not start the launch agent")
-      guard let fallback = attempt.lock else { exit(0) }
-      lock = fallback
+      attempt.lock?.release()
+      _ = LaunchAtLogin.kickstart()
+      switch InstanceLock.waitForHolder(at: Self.lockURL, timeout: StartupPlan.agentStartTimeout)
+      {
+      case .held:
+        exit(0)
+      case .failed:
+        log.error("Could not open the instance lock file")
+        exit(1)
+      case .acquired:
+        log.error("The launch agent did not start, running without it")
+        lock = InstanceLock.acquire(at: Self.lockURL).lock
+        if lock == nil { exit(0) }
+      }
     case .exitQuietly:
       exit(0)
     case .exitFailure:
