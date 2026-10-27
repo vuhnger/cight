@@ -4,18 +4,24 @@ import Testing
 
 @testable import CightCore
 
+private final class Counter: Sendable {
+  private let value = Mutex(0)
+  var count: Int { value.withLock { $0 } }
+  func increment() { value.withLock { $0 += 1 } }
+}
+
 private func makeClient(
   tokens: [String?] = ["tok"],
   now: Date = t0,
   handler: @escaping @Sendable (URLRequest) -> StubReply
-) -> (GitHubClient, Mutex<Int>) {
+) -> (GitHubClient, Counter) {
   StubProtocol.install(handler)
-  let calls = Mutex(0)
+  let calls = Counter()
   let queue = Mutex(tokens)
   let client = GitHubClient(
     session: GitHubClient.makeSession(protocolClasses: [StubProtocol.self]),
     tokenProvider: {
-      calls.withLock { $0 += 1 }
+      calls.increment()
       return queue.withLock { $0.count > 1 ? $0.removeFirst() : $0[0] }
     },
     now: { now })
@@ -72,6 +78,7 @@ struct GitHubClientTests {
       if request.value(forHTTPHeaderField: "If-None-Match") == "\"abc\"" {
         return StubReply(status: 304)
       }
+      if StubProtocol.requests.count > 1 { return StubReply(status: 500) }
       return ok("runs", headers: ["ETag": "\"abc\""])
     }
     let first = try await client.runs(owner: "o", name: "r")
@@ -97,7 +104,7 @@ struct GitHubClientTests {
         ? ok("user") : StubReply(status: 401)
     }
     #expect(try await client.viewer().login == "octocat")
-    #expect(calls.withLock { $0 } == 2)
+    #expect(calls.count == 2)
     #expect(StubProtocol.requests.count == 2)
   }
 
@@ -106,7 +113,7 @@ struct GitHubClientTests {
       StubReply(status: 401)
     }
     await #expect(throws: GitHubError.unauthorized) { try await client.viewer() }
-    #expect(calls.withLock { $0 } == 2)
+    #expect(calls.count == 2)
     #expect(StubProtocol.requests.count == 2)
     #expect(!"\(GitHubError.unauthorized)".contains("secret"))
   }
@@ -114,7 +121,7 @@ struct GitHubClientTests {
   @Test func doesNotRetryWhenTheTokenIsUnchanged() async {
     let (client, calls) = makeClient(tokens: ["same"]) { _ in StubReply(status: 401) }
     await #expect(throws: GitHubError.unauthorized) { try await client.viewer() }
-    #expect(calls.withLock { $0 } == 2)
+    #expect(calls.count == 2)
     #expect(StubProtocol.requests.count == 1)
   }
 
