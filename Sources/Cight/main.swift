@@ -1,14 +1,44 @@
 import AppKit
 import CightCore
+import OSLog
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+  private let log = Logger(subsystem: "com.vuhnger.cight", category: "startup")
   private let monitor = Monitor()
   private var status: StatusItemController?
   private var panel: PanelController?
   private var settingsWindow: SettingsWindow?
   private var notifier: Notifier?
   private var settingsModel: SettingsModel?
+
+  func applicationWillFinishLaunching(_ notification: Notification) {
+    let waits = LaunchAgent.has(LaunchAgent.argument) || LaunchAgent.has(LaunchAgent.waitArgument)
+    let attempt = InstanceLock.acquire(at: LaunchAgent.lockURL)
+    switch StartupPlan.decide(
+      lock: attempt.outcome, waits: waits, agentEnabled: !waits && LaunchAgent.isEnabled())
+    {
+    case .run:
+      LaunchAgent.lock = attempt.lock
+    case .waitForLock:
+      LaunchAgent.lock = InstanceLock.acquire(at: LaunchAgent.lockURL, timeout: 10).lock
+      if LaunchAgent.lock == nil {
+        log.error("Gave up waiting for the instance lock")
+        exit(1)
+      }
+    case .kickstartThenExit:
+      attempt.lock?.release()
+      if LaunchAgent.start(fresh: LaunchAgent.isStale(defaults: .standard)) { exit(0) }
+      log.error("The launch agent did not start, running without it")
+      LaunchAgent.lock = InstanceLock.acquire(at: LaunchAgent.lockURL).lock
+      if LaunchAgent.lock == nil { exit(0) }
+    case .exitQuietly:
+      exit(0)
+    case .exitFailure:
+      log.error("Could not open the instance lock file")
+      exit(1)
+    }
+  }
 
   func applicationDidFinishLaunching(_ notification: Notification) {
     NSApp.appearance = NSAppearance(named: .darkAqua)
@@ -36,7 +66,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     settingsWindow = window
     monitor.start()
 
-    if monitor.watched.isEmpty { window.show() }
+    if !LaunchAgent.has(LaunchAgent.argument) || monitor.watched.isEmpty { window.show() }
   }
 
   func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool)

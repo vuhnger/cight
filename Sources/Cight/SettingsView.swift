@@ -15,6 +15,7 @@ extension BranchFilter {
 struct SettingsView: View {
   @Bindable var model: SettingsModel
   var notifier: Notifier
+  var launchAtLogin: LaunchAtLogin
 
   var body: some View {
     VStack(spacing: 16) {
@@ -27,7 +28,7 @@ struct SettingsView: View {
 
       switch model.pane {
       case .repositories: RepositoriesPane(model: model)
-      case .general: GeneralPane(notifier: notifier)
+      case .general: GeneralPane(notifier: notifier, launchAtLogin: launchAtLogin)
       }
     }
     .padding(20)
@@ -120,9 +121,29 @@ extension WatchedRepo {
 
 private struct GeneralPane: View {
   @Bindable var notifier: Notifier
+  var launchAtLogin: LaunchAtLogin
 
   var body: some View {
     VStack(alignment: .leading, spacing: 14) {
+      Toggle(
+        "Launch at login",
+        isOn: Binding(
+          get: { launchAtLogin.presentation.isOn }, set: { launchAtLogin.set($0) }))
+      if let message = launchAtLogin.presentation.message {
+        HStack {
+          Text(message).foregroundStyle(.orange).font(.callout)
+          Spacer()
+          if launchAtLogin.presentation.offersSystemSettings {
+            Button("Open Login Items") { launchAtLogin.openSystemSettings() }
+          }
+        }
+      }
+      if let error = launchAtLogin.error {
+        Text(error).foregroundStyle(.orange).font(.callout)
+      }
+
+      Divider()
+
       Toggle("Notify when a run fails", isOn: $notifier.settings.failed)
       Toggle("Notify when a failing run is fixed", isOn: $notifier.settings.fixed)
       Toggle("Notify when a run starts", isOn: $notifier.settings.started)
