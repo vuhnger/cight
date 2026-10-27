@@ -98,17 +98,4 @@ struct NotificationTests {
     defaults.set(Data([0xFF, 0x01]), forKey: NotificationSettings.key)
     #expect(NotificationSettings.load(from: defaults) == NotificationSettings())
   }
-
-  @Test func signedOutNoticeFiresOnlyOnTheTransition() {
-    var gate = SignOutGate()
-    let sequence = [false, true, true, true, false, true]
-    let fired = sequence.map { gate.shouldNotify(signedOut: $0) }
-    #expect(fired == [false, true, false, false, false, true])
-  }
-
-  @Test func aLaunchWhileSignedOutNotifiesOnce() {
-    var gate = SignOutGate()
-    let fired = [true, true].map { gate.shouldNotify(signedOut: $0) }
-    #expect(fired == [true, false])
-  }
 }

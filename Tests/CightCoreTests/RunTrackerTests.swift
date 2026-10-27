@@ -159,4 +159,25 @@ struct RunTrackerTests {
           repo: "o/a", runs: [failed(3, branch: "x"), failed(5, branch: "z")], filter: .all))
         == [.failed])
   }
+
+  @Test func aFilterChangeNeverRepeatsABannerAlreadyShown() {
+    var tracker = RunTracker()
+    _ = tracker.ingest(repo: "o/a", runs: [passed(1)], filter: .all)
+    #expect(
+      kinds(tracker.ingest(repo: "o/a", runs: [failed(2, branch: "x")], filter: .all)) == [.failed])
+    let reported = [failed(2, branch: "x")]
+    for filter in [BranchFilter.mine, .defaultBranch, .all, .mine, .all] {
+      #expect(tracker.ingest(repo: "o/a", runs: reported, filter: filter).isEmpty)
+      #expect(tracker.ingest(repo: "o/a", runs: reported, filter: filter).isEmpty)
+    }
+  }
+
+  @Test func aFilterChangeKeepsWhatWasAlreadyReportedWhileARunIsInFlight() {
+    var tracker = RunTracker()
+    _ = tracker.ingest(repo: "o/a", runs: [passed(1)], filter: .all)
+    #expect(kinds(tracker.ingest(repo: "o/a", runs: [running(2)], filter: .all)) == [.started])
+    #expect(tracker.ingest(repo: "o/a", runs: [running(2)], filter: .mine).isEmpty)
+    #expect(tracker.ingest(repo: "o/a", runs: [running(2)], filter: .all).isEmpty)
+    #expect(kinds(tracker.ingest(repo: "o/a", runs: [failed(2)], filter: .all)) == [.failed])
+  }
 }
