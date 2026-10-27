@@ -7,3 +7,10 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+  - package-ecosystem: swift
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      swift:
+        patterns: ["*"]
