@@ -11,6 +11,7 @@ final class StatusItemController: NSObject {
   var onSettings: () -> Void = {}
   var onCheck: () -> Void = {}
   var onRefresh: () -> Void = {}
+  var onFeedback: () -> Void = {}
   var canCheck: () -> Bool = { false }
 
   var frame: NSRect? {
@@ -75,10 +76,12 @@ final class StatusItemController: NSObject {
     let check = NSMenuItem(
       title: "Check for updates…", action: #selector(checkForUpdates), keyEquivalent: "")
     let refresh = NSMenuItem(title: "Refresh now", action: #selector(refreshNow), keyEquivalent: "")
-    for entry in [settings, check, refresh] { entry.target = self }
+    let feedback = NSMenuItem(
+      title: "Send feedback…", action: #selector(sendFeedback), keyEquivalent: "")
+    for entry in [settings, check, refresh, feedback] { entry.target = self }
     check.isEnabled = canCheck()
     menu.items = [
-      settings, check, refresh, .separator(),
+      settings, check, refresh, feedback, .separator(),
       NSMenuItem(
         title: "Quit Cight", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"),
     ]
@@ -92,4 +95,5 @@ final class StatusItemController: NSObject {
   @objc private func openSettings() { onSettings() }
   @objc private func checkForUpdates() { onCheck() }
   @objc private func refreshNow() { onRefresh() }
+  @objc private func sendFeedback() { onFeedback() }
 }

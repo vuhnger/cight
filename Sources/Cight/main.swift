@@ -54,6 +54,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     status.onClick = { [weak panel] in panel?.iconClicked() }
     status.onMenu = { [weak panel] in panel?.menuChanged(open: $0) }
     status.onRefresh = { [monitor] in monitor.retry() }
+    status.onFeedback = {
+      let info = Bundle.main.infoDictionary
+      NSWorkspace.shared.open(
+        Feedback.url(
+          appVersion: info?["CFBundleShortVersionString"] as? String ?? "",
+          build: info?["CFBundleVersion"] as? String ?? "",
+          system: ProcessInfo.processInfo.operatingSystemVersion))
+    }
     track({ [monitor] in monitor.glyphs }, apply: { [weak status] in status?.update($0) })
     self.status = status
     self.panel = panel
