@@ -8,4 +8,4 @@ GitHub Actions status for your repos, in the menu bar. Later, maybe tagging AI a
 A super fast CI overview and the ability to act on it.
 
 **Platform**
-macOS 26, Swift 6, SwiftUI in AppKit, no dependencies.
+macOS 26, Swift 6, SwiftUI in AppKit.
