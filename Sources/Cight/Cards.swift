@@ -23,7 +23,7 @@ enum Metrics {
   static let menuBarGlyph: CGFloat = 15
   static let settingsInnerSpacing: CGFloat = 6
   static let glyphGap: CGFloat = 10
-  static var cardGlass: Glass { .regular.tint(.black.opacity(0.35)) }
+  static let cardFill = Color(red: 0x14 / 255, green: 0x17 / 255, blue: 0x1A / 255)
 
   @MainActor
   static func height(of repo: RepoModel) -> CGFloat {
@@ -105,8 +105,7 @@ struct NoticeCard: View {
     }
     .padding(.horizontal, 16)
     .frame(height: Metrics.notice)
-    .glassEffect(.regular.tint(.orange.opacity(0.3)), in: .rect(cornerRadius: Metrics.cardRadius))
-    .clipShape(.rect(cornerRadius: Metrics.cardRadius))
+    .cardSurface()
   }
 
   private var glyph: GlyphKind {
@@ -173,8 +172,7 @@ struct RepoCard: View {
     .padding(.horizontal, Metrics.cardHorizontal)
     .padding(.vertical, Metrics.cardVertical)
     .frame(height: Metrics.height(of: repo), alignment: .top)
-    .glassEffect(Metrics.cardGlass, in: .rect(cornerRadius: Metrics.cardRadius))
-    .clipShape(.rect(cornerRadius: Metrics.cardRadius))
+    .cardSurface()
   }
 
   private var header: some View {
@@ -330,5 +328,11 @@ private struct RowBar: View {
         }
         .padding(.leading, 20)
     }
+  }
+}
+
+extension View {
+  func cardSurface() -> some View {
+    background(Metrics.cardFill, in: .rect(cornerRadius: Metrics.cardRadius))
   }
 }
