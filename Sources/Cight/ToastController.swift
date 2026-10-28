@@ -174,12 +174,14 @@ struct ToastStackView: View {
   let resized: (CGSize) -> Void
 
   var body: some View {
-    VStack(spacing: 8) {
-      ForEach(model.items) { item in
-        ToastCard(content: item.content)
-          .opacity(item.fading ? 0 : 1)
-          .contentShape(Rectangle())
-          .onTapGesture { tap(item.id) }
+    GlassEffectContainer(spacing: 12) {
+      VStack(spacing: 8) {
+        ForEach(model.items) { item in
+          ToastCard(content: item.content)
+            .opacity(item.fading ? 0 : 1)
+            .contentShape(Rectangle())
+            .onTapGesture { tap(item.id) }
+        }
       }
     }
     .fixedSize()
@@ -212,7 +214,6 @@ struct ToastCard: View {
     .padding(.vertical, Metrics.cardVertical)
     .frame(width: Metrics.toastWidth, alignment: .leading)
     .glassEffect(Metrics.cardGlass, in: .rect(cornerRadius: Metrics.cardRadius))
-    .clipShape(.rect(cornerRadius: Metrics.cardRadius))
   }
 
   @ViewBuilder private var header: some View {
