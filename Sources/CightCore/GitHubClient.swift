@@ -9,7 +9,7 @@ public enum GitHubError: Error, Equatable, Sendable {
   case decoding
 }
 
-public actor GitHubClient {
+public actor GitHubClient: RunProvider {
   private static let baseURL = "https://api.github.com/"
   private static let apiHost = "api.github.com"
   private static let timeout: TimeInterval = 15
