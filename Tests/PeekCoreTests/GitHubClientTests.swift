@@ -34,6 +34,22 @@ private func ok(_ fixture: String, headers: [String: String] = [:]) -> StubReply
   StubReply(status: 200, headers: headers, body: Fixture.data(fixture))
 }
 
+private func pullRun(_ sha: String, event: String = "pull_request") -> WorkflowRun {
+  makeRun(id: 1, event: event, sha: sha)
+}
+
+private let lookupRepo = Repo(
+  id: 1, name: "r", fullName: "o/r", defaultBranch: "main", pushedAt: Date(),
+  host: Repo.githubHost)
+
+private func isLookup(_ request: URLRequest) -> Bool {
+  request.url?.path.contains("/commits/") == true
+}
+
+private func lookups() -> [URLRequest] {
+  StubProtocol.requests.filter(isLookup)
+}
+
 @Suite(.serialized)
 struct GitHubClientTests {
   @Test func eachRequestHasAFifteenSecondTimeoutAndIgnoresLocalCaches() async throws {
@@ -42,6 +58,52 @@ struct GitHubClientTests {
     let request = try #require(StubProtocol.requests.first)
     #expect(request.timeoutInterval == 15)
     #expect(request.cachePolicy == .reloadIgnoringLocalCacheData)
+  }
+
+  @Test func aMergedPullRequestRunGetsItsNumberFromTheCommitLookup() async throws {
+    let (client, _) = makeClient { _ in
+      StubReply(status: 200, body: Data(#"[{"number": 42}]"#.utf8))
+    }
+    let runs = await client.resolvingPullRequests([pullRun("abc")], repo: lookupRepo)
+    #expect(runs.first?.pullRequestNumber == 42)
+    #expect(lookups().first?.url?.path == "/repos/o/r/commits/abc/pulls")
+  }
+
+  @Test func aFailedLookupKeepsTheRunAndRetriesOnTheNextCall() async throws {
+    let (client, _) = makeClient { _ in
+      lookups().count == 1
+        ? StubReply(status: 500) : StubReply(status: 200, body: Data(#"[{"number": 9}]"#.utf8))
+    }
+    let first = await client.resolvingPullRequests([pullRun("abc")], repo: lookupRepo)
+    #expect(first[0].pullRequestNumber == nil)
+    let second = await client.resolvingPullRequests([pullRun("abc")], repo: lookupRepo)
+    #expect(second[0].pullRequestNumber == 9)
+    #expect(lookups().count == 2)
+  }
+
+  @Test func aCachedShaMakesNoSecondLookupAndAnEmptyAnswerIsCachedToo() async throws {
+    let (client, _) = makeClient { _ in StubReply(status: 200, body: Data("[]".utf8)) }
+    for _ in 1...3 { _ = await client.resolvingPullRequests([pullRun("abc")], repo: lookupRepo) }
+    #expect(lookups().count == 1)
+  }
+
+  @Test func shasThatAreNoLongerShownAreForgotten() async throws {
+    let (client, _) = makeClient { _ in StubReply(status: 200, body: Data(#"[{"number": 1}]"#.utf8))
+    }
+    for sha in ["abc", "def", "abc"] {
+      _ = await client.resolvingPullRequests([pullRun(sha)], repo: lookupRepo)
+    }
+    #expect(lookups().count == 3)
+  }
+
+  @Test func runsThatAlreadyHaveANumberOrAreNotPullRequestsMakeNoLookup() async throws {
+    let (client, _) = makeClient { _ in StubReply(status: 500) }
+    let linked = makeRun(id: 2, event: "pull_request", pull: 5, sha: "abc")
+    let runs = await client.resolvingPullRequests(
+      [pullRun("abc", event: "push"), linked], repo: lookupRepo)
+    #expect(runs[0].pullRequestNumber == nil)
+    #expect(runs[1].pullRequestNumber == 5)
+    #expect(lookups().isEmpty)
   }
 
   @Test func a200WithoutAnETagEvictsTheOldEntry() async throws {

@@ -306,14 +306,20 @@ final class Monitor {
         meta = RepoMeta(repo: repo, branches: branches ?? cached?.branches, fetchedAt: now)
       }
       let runs = BuiltInRuns.filter(try await client.runs(repo: repo), shown: showBuiltIn)
-      let group = RunGrouping.groups(
-        [
-          RepoRuns(
-            id: meta.repo.id, fullName: meta.repo.fullName,
-            defaultBranch: meta.repo.defaultBranch, runs: runs, liveBranches: meta.branches)
-        ],
-        viewer: viewer
-      ).first
+      func grouped(_ runs: [WorkflowRun]) -> RepoGroup? {
+        RunGrouping.groups(
+          [
+            RepoRuns(
+              id: meta.repo.id, fullName: meta.repo.fullName,
+              defaultBranch: meta.repo.defaultBranch, runs: runs, liveBranches: meta.branches)
+          ],
+          viewer: viewer
+        ).first
+      }
+      let shown = await client.resolvingPullRequests(
+        grouped(runs)?.branches.flatMap(\.runs) ?? [], repo: repo)
+      let resolved = Dictionary(shown.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+      let group = grouped(runs.map { resolved[$0.id] ?? $0 })
       var etas: [Int: ETAEstimate] = [:]
       for run in group?.branches.flatMap(\.runs) ?? [] where run.state == .running {
         etas[run.id] = ETA.estimate(for: run, among: runs)

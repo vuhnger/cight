@@ -96,7 +96,8 @@ public struct WorkflowRun: Decodable, Sendable, Equatable, Identifiable {
   public let conclusion: String?
   public let event: String?
   public let headBranch: String?
-  public let pullRequests: [PullRequestRef]?
+  public var pullRequests: [PullRequestRef]?
+  public let headSha: String?
   public let runAttempt: Int?
   public let runStartedAt: Date?
   public let updatedAt: Date?
@@ -122,6 +123,7 @@ public struct WorkflowRun: Decodable, Sendable, Equatable, Identifiable {
     self.event = event
     self.headBranch = headBranch
     self.pullRequests = pullRequests
+    self.headSha = nil
     self.runAttempt = nil
     self.runStartedAt = runStartedAt
     self.updatedAt = updatedAt
