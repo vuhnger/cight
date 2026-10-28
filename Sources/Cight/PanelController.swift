@@ -69,10 +69,6 @@ final class PanelController: NSObject {
     registerHotKey()
   }
 
-  func pointerMayHaveMoved() {
-    samplePointer()
-  }
-
   func iconClicked() {
     trigger = ("click", NSApp.currentEvent?.timestamp ?? CACurrentMediaTime())
     send(.iconClick)
@@ -219,18 +215,6 @@ final class PanelController: NSObject {
         return event
       },
     ].compactMap { $0 }
-    panel.contentView?.addTrackingArea(
-      NSTrackingArea(
-        rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
-        owner: self, userInfo: nil))
-  }
-
-  @objc func mouseEntered(with event: NSEvent) {
-    samplePointer()
-  }
-
-  @objc func mouseExited(with event: NSEvent) {
-    samplePointer()
   }
 
   private func samplePointer() {
