@@ -99,9 +99,7 @@ public enum RunGrouping {
               branch: displayName(key, repoId: repo.id, run: runs[0]),
               state: .mostUrgent(runs.map(\.state)), runs: sorted(runs))
           }
-          .sorted {
-            ($0.state.urgency, $1.recency, $0.branch) < ($1.state.urgency, $0.recency, $1.branch)
-          }
+          .sorted { ($1.recency, $0.branch) < ($0.recency, $1.branch) }
         return RepoGroup(
           fullName: repo.fullName, state: .mostUrgent(branches.map(\.state)), branches: branches)
       }
@@ -124,8 +122,6 @@ public enum RunGrouping {
   }
 
   private static func sorted(_ runs: [WorkflowRun]) -> [WorkflowRun] {
-    runs.sorted {
-      ($0.state.urgency, $1.activityDate, $0.id) < ($1.state.urgency, $0.activityDate, $1.id)
-    }
+    runs.sorted { ($1.activityDate, $0.id) < ($0.activityDate, $1.id) }
   }
 }
