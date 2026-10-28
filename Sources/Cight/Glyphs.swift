@@ -38,7 +38,12 @@ enum GlyphKind: Equatable {
 }
 
 struct PieShape: Shape {
-  let fraction: Double
+  var fraction: Double
+
+  var animatableData: Double {
+    get { fraction }
+    set { fraction = newValue }
+  }
 
   func path(in rect: CGRect) -> Path {
     var path = Path()
