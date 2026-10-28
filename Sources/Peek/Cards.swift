@@ -24,7 +24,7 @@ enum Metrics {
   static let settingsInnerSpacing: CGFloat = 6
   static let glyphGap: CGFloat = 10
   static let pressedOpacity: Double = 0.6
-  static var cardGlass: Glass { .regular.tint(.black.opacity(0.35)) }
+  static var cardGlass: Glass { .regular.tint(.black.opacity(0.65)) }
 
   @MainActor
   static func height(of repo: RepoModel) -> CGFloat {
