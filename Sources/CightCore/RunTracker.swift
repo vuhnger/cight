@@ -5,6 +5,7 @@ public struct RunEvent: Sendable, Equatable {
     case started
     case failed
     case recovered
+    case passed
   }
 
   public let kind: Kind
@@ -81,7 +82,7 @@ public struct RunTracker: Sendable {
     switch run.state {
     case .running: .started
     case .failed: .failed
-    case .passed: settledBefore == .failed ? .recovered : nil
+    case .passed: settledBefore == .failed ? .recovered : (run.isPullOrMergeRequest ? .passed : nil)
     case .queued, .neutral: nil
     }
   }

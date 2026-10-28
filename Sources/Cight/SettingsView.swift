@@ -54,6 +54,9 @@ private struct GeneralPane: View {
       Toggle("Notify when a run fails", isOn: $notifier.settings.failed)
       Toggle("Notify when a failing run is fixed", isOn: $notifier.settings.fixed)
       Toggle("Notify when a run starts", isOn: $notifier.settings.started)
+      Toggle(
+        "Notify when a run passes on a pull request or merge request",
+        isOn: $notifier.settings.passed)
 
       Divider()
 

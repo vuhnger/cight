@@ -6,11 +6,23 @@ public struct NotificationSettings: Codable, Sendable, Equatable {
   public var failed: Bool
   public var fixed: Bool
   public var started: Bool
+  public var passed: Bool
 
-  public init(failed: Bool = true, fixed: Bool = true, started: Bool = false) {
+  public init(
+    failed: Bool = true, fixed: Bool = true, started: Bool = false, passed: Bool = true
+  ) {
     self.failed = failed
     self.fixed = fixed
     self.started = started
+    self.passed = passed
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    failed = try container.decode(Bool.self, forKey: .failed)
+    fixed = try container.decode(Bool.self, forKey: .fixed)
+    started = try container.decode(Bool.self, forKey: .started)
+    passed = try container.decodeIfPresent(Bool.self, forKey: .passed) ?? true
   }
 
   public static func load(from defaults: UserDefaults) -> NotificationSettings {
@@ -27,6 +39,7 @@ public struct NotificationSettings: Codable, Sendable, Equatable {
     case .failed: failed
     case .recovered: fixed
     case .started: started
+    case .passed: passed
     }
   }
 }
@@ -70,6 +83,7 @@ public struct ToastContent: Sendable, Equatable {
       case .failed: (ToastGlyph.failed, "failed")
       case .recovered: (.passed, "fixed")
       case .started: (.running, "started")
+      case .passed: (.passed, "passed")
       }
     return ToastContent(
       glyph: glyph, line1: event.repo, line2: "\(run.name ?? "Workflow") \(verb) on \(run.branch)",
