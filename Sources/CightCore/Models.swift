@@ -147,6 +147,21 @@ public struct WorkflowRun: Decodable, Sendable, Equatable, Identifiable {
     return url
   }
 
+  public func targetLink(host: String) -> URL? {
+    guard let run = link(host: host) else { return nil }
+    guard let number = pullRequestNumber else { return run }
+    let isGitLab = isMergeRequest == true
+    let marker = isGitLab ? "/-/" : "/actions/"
+    guard let cut = run.path.range(of: marker),
+      var components = URLComponents(url: run, resolvingAgainstBaseURL: false)
+    else { return run }
+    components.path =
+      run.path[..<cut.lowerBound] + (isGitLab ? "/-/merge_requests/" : "/pull/") + "\(number)"
+    components.query = nil
+    components.fragment = nil
+    return components.url ?? run
+  }
+
   public var pullRequestNumber: Int? {
     pullRequests?.first?.number
   }
