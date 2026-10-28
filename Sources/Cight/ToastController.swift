@@ -213,7 +213,7 @@ struct ToastCard: View {
     .padding(.horizontal, Metrics.cardHorizontal)
     .padding(.vertical, Metrics.cardVertical)
     .frame(width: Metrics.toastWidth, alignment: .leading)
-    .glassEffect(.regular, in: .rect(cornerRadius: Metrics.cardRadius))
+    .glassEffect(Metrics.cardGlass, in: .rect(cornerRadius: Metrics.cardRadius))
   }
 
   @ViewBuilder private var header: some View {

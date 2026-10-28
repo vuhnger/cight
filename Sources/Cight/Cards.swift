@@ -23,6 +23,7 @@ enum Metrics {
   static let menuBarGlyph: CGFloat = 15
   static let settingsInnerSpacing: CGFloat = 6
   static let glyphGap: CGFloat = 10
+  static var cardGlass: Glass { .regular.tint(.black.opacity(0.35)) }
 
   @MainActor
   static func height(of repo: RepoModel) -> CGFloat {
@@ -75,6 +76,7 @@ struct PanelRoot: View {
       .padding(Metrics.outerPadding)
     }
     .scrollIndicators(.hidden)
+    .focusEffectDisabled()
     .scrollBounceBehavior(.basedOnSize)
     .frame(width: Metrics.panelWidth, alignment: .top)
     .preferredColorScheme(.dark)
@@ -172,7 +174,7 @@ struct RepoCard: View {
     .padding(.horizontal, Metrics.cardHorizontal)
     .padding(.vertical, Metrics.cardVertical)
     .frame(height: Metrics.height(of: repo), alignment: .top)
-    .glassEffect(.regular, in: .rect(cornerRadius: Metrics.cardRadius))
+    .glassEffect(Metrics.cardGlass, in: .rect(cornerRadius: Metrics.cardRadius))
   }
 
   private var header: some View {
