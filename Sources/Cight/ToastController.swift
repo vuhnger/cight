@@ -195,7 +195,7 @@ struct ToastCard: View {
 
   var body: some View {
     HStack(spacing: 12) {
-      StateGlyph(kind: glyph, size: 16)
+      StateGlyph(kind: glyph, size: Metrics.headerGlyph)
       VStack(alignment: .leading, spacing: 2) {
         header
         HStack(alignment: .firstTextBaseline, spacing: 8) {

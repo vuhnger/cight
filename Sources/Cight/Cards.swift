@@ -17,6 +17,10 @@ enum Metrics {
   static let bar: CGFloat = 8
   static let problem: CGFloat = 38
   static let notice: CGFloat = 64
+  static let noticeGlyph: CGFloat = 20
+  static let headerGlyph: CGFloat = 16
+  static let rowGlyph: CGFloat = 13
+  static let menuBarGlyph: CGFloat = 15
 
   @MainActor
   static func height(of repo: RepoModel) -> CGFloat {
@@ -88,7 +92,7 @@ struct NoticeCard: View {
 
   var body: some View {
     HStack(spacing: 12) {
-      StateGlyph(kind: glyph, size: 20)
+      StateGlyph(kind: glyph, size: Metrics.noticeGlyph)
       content
         .font(.callout)
         .lineLimit(2)
@@ -174,7 +178,8 @@ struct RepoCard: View {
       repo.toggle()
     } label: {
       HStack(spacing: 10) {
-        StateGlyph(kind: repo.problem != nil ? .warning : GlyphKind(repo.glyph), size: 16)
+        StateGlyph(
+          kind: repo.problem != nil ? .warning : GlyphKind(repo.glyph), size: Metrics.headerGlyph)
         HStack(spacing: 0) {
           Text("\(repo.owner)/").foregroundStyle(.secondary)
           Text(repo.name).fontWeight(.semibold)
@@ -268,12 +273,13 @@ private struct RowGlyph: View {
       TimelineView(.periodic(from: .now, by: 1)) { context in
         let progress = row.progress(at: context.date)
         StateGlyph(
-          kind: progress?.isOverdue == true ? .overdue : .running(progress?.fraction), size: 13
+          kind: progress?.isOverdue == true ? .overdue : .running(progress?.fraction),
+          size: Metrics.rowGlyph
         )
         .animation(.linear(duration: 1), value: progress?.fraction)
       }
     } else {
-      StateGlyph(kind: GlyphKind(row.state), size: 13)
+      StateGlyph(kind: GlyphKind(row.state), size: Metrics.rowGlyph)
     }
   }
 }

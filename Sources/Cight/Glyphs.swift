@@ -106,7 +106,7 @@ struct MenuBarStrip: View {
   var body: some View {
     HStack(spacing: 5) {
       ForEach(Array(glyphs.enumerated()), id: \.offset) { _, glyph in
-        StateGlyph(kind: GlyphKind(glyph), size: 15)
+        StateGlyph(kind: GlyphKind(glyph), size: Metrics.menuBarGlyph)
       }
     }
     .padding(.horizontal, 2)
