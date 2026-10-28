@@ -50,6 +50,7 @@ final class Monitor {
   private(set) var repos: [RepoModel] = []
   private(set) var notice: PanelNotice?
   private(set) var glyphs: [MenuBarGlyph] = [.idle]
+  private(set) var connections: [ConnectionRow] = []
   var onEvents: (([RunEvent]) -> Void)?
   var onSession: ((SessionState) -> Void)?
   var onGitLabSession: ((SessionState) -> Void)?
@@ -394,6 +395,13 @@ final class Monitor {
     let newNotice = NoticePolicy.combined(github: githubNotice, gitLabSignedOut: gitLabSignedOut)
     if newNotice != notice { notice = newNotice }
     let githubSignedOut = githubErrors.contains(.unauthorized) || githubNotice == .ghMissing
+    let newConnections = Connections.rows(
+      github: ConnectionAccount(
+        host: Repo.githubHost, login: github?.viewer, signedOut: githubSignedOut || !ghInstalled),
+      gitLab: gitLabs.map {
+        ConnectionAccount(host: $0.provider.host, login: $0.viewer, signedOut: $0.signedOut)
+      })
+    if newConnections != connections { connections = newConnections }
     let newGlyphs = MenuBarGlyphs.glyphs(
       repos: newOrder.compactMap { menuInputs[$0.id] },
       signedOut: (githubSignedOut || gitLabSignedOut) && newOrder.isEmpty,
