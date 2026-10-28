@@ -8,6 +8,24 @@ final class ToastPanel: NSPanel {
   override var canBecomeMain: Bool { false }
 }
 
+final class ToastHostingView: NSHostingView<ToastStackView> {
+  var pointerChanged: (Bool) -> Void = { _ in }
+
+  required init(rootView: ToastStackView) {
+    super.init(rootView: rootView)
+    addTrackingArea(
+      NSTrackingArea(
+        rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+        owner: self, userInfo: nil))
+  }
+
+  @MainActor @preconcurrency required init?(coder: NSCoder) { nil }
+
+  override func mouseEntered(with event: NSEvent) { pointerChanged(true) }
+
+  override func mouseExited(with event: NSEvent) { pointerChanged(false) }
+}
+
 struct ToastItem: Identifiable {
   let id = UUID()
   let content: ToastContent
@@ -28,16 +46,16 @@ final class ToastController {
   private let model = ToastModel()
   private let anchor: () -> NSRect?
   private let panel: ToastPanel
-  private let hosting: NSHostingView<ToastStackView>
+  private let hosting: ToastHostingView
   private var timers: [UUID: Task<Void, Never>] = [:]
   private var panelOpen = false
   private var size = CGSize.zero
+  private var hovering = false
 
   init(anchor: @escaping () -> NSRect?) {
     self.anchor = anchor
-    hosting = NSHostingView(
-      rootView: ToastStackView(
-        model: model, hover: { _, _ in }, tap: { _ in }, resized: { _ in }))
+    hosting = ToastHostingView(
+      rootView: ToastStackView(model: model, tap: { _ in }, resized: { _ in }))
     hosting.sizingOptions = []
     panel = ToastPanel(
       contentRect: .zero, styleMask: [.nonactivatingPanel, .borderless], backing: .buffered,
@@ -53,12 +71,12 @@ final class ToastController {
     panel.appearance = NSAppearance(named: .darkAqua)
     hosting.rootView = ToastStackView(
       model: model,
-      hover: { [weak self] id, inside in self?.hover(id, inside: inside) },
       tap: { [weak self] id in self?.tap(id) },
       resized: { [weak self] size in
         self?.size = size
         self?.layout()
       })
+    hosting.pointerChanged = { [weak self] inside in self?.pointerChanged(inside) }
     track({ [model] in model.items.map(\.id) }, apply: { [weak self] _ in self?.layout() })
   }
 
@@ -68,7 +86,7 @@ final class ToastController {
     let kept = ToastStack.pushing(item.id, onto: model.items.map(\.id))
     for id in timers.keys where !kept.contains(id) { cancelTimer(id) }
     model.items = ([item] + model.items).filter { kept.contains($0.id) }
-    startTimer(item.id)
+    if !hovering { startTimer(item.id) }
     return true
   }
 
@@ -108,9 +126,11 @@ final class ToastController {
     model.items.removeAll { $0.id == id }
   }
 
-  private func hover(_ id: UUID, inside: Bool) {
-    guard model.items.contains(where: { $0.id == id && !$0.fading }) else { return }
-    if inside { cancelTimer(id) } else { startTimer(id) }
+  private func pointerChanged(_ inside: Bool) {
+    hovering = inside
+    for item in model.items where !item.fading {
+      if inside { cancelTimer(item.id) } else { startTimer(item.id) }
+    }
   }
 
   private func tap(_ id: UUID) {
@@ -122,6 +142,7 @@ final class ToastController {
 
   private func layout() {
     guard !model.items.isEmpty else {
+      hovering = false
       panel.orderOut(nil)
       return
     }
@@ -149,7 +170,6 @@ final class ToastController {
 
 struct ToastStackView: View {
   let model: ToastModel
-  let hover: (UUID, Bool) -> Void
   let tap: (UUID) -> Void
   let resized: (CGSize) -> Void
 
@@ -160,7 +180,6 @@ struct ToastStackView: View {
           ToastCard(content: item.content)
             .opacity(item.fading ? 0 : 1)
             .contentShape(Rectangle())
-            .onHover { hover(item.id, $0) }
             .onTapGesture { tap(item.id) }
         }
       }
