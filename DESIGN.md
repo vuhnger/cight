@@ -1,5 +1,5 @@
 ---
-name: Cight
+name: Peek
 description: Menu bar status for GitHub Actions runs and GitLab pipelines on macOS 26.
 colors:
   icon-ring-green: "#3FE07A"
@@ -53,11 +53,11 @@ components:
     height: "20px"
 ---
 
-# Design System: Cight
+# Design System: Peek
 
 ## Overview
 
-Cight is flat and minimal with no decoration. It is dark only: the panel, the settings window and the menu bar strip all force the dark appearance. The panel is a column of Liquid Glass cards, one per repository, with no header and no footer. Color only carries run state.
+Peek is flat and minimal with no decoration. It is dark only: the panel, the settings window and the menu bar strip all force the dark appearance. The panel is a column of Liquid Glass cards, one per repository, with no header and no footer. Color only carries run state.
 
 **Key Characteristics:**
 - Dark only.
@@ -132,7 +132,7 @@ A glass card like a panel card, 340px wide and sized to its content, with a stat
 Passed is a filled check circle, failed a filled cross circle, queued a clock. Running is an amber ring with a pie that fills with estimated progress, or a center dot when there is no estimate. Overdue is a full orange pie.
 
 ### Panel behavior
-The panel opens after the pointer rests 140ms on the menu bar icon and closes 50ms after the pointer leaves both icon and panel. A click on the icon and the global shortcut toggle it. The shortcut is Ctrl+Opt+Cmd+G by default and can be changed in Settings. A right click or Ctrl-click on the icon opens a menu with Settings…, Check for updates…, Refresh now, Send feedback… and Quit Cight, and closes the panel. Escape and a click outside close it.
+The panel opens after the pointer rests 140ms on the menu bar icon and closes 50ms after the pointer leaves both icon and panel. A click on the icon and the global shortcut toggle it. The shortcut is Ctrl+Opt+Cmd+G by default and can be changed in Settings. A right click or Ctrl-click on the icon opens a menu with Settings…, Check for updates…, Refresh now, Send feedback… and Quit Peek, and closes the panel. Escape and a click outside close it.
 
 ### App icon
 A flat green open ring on a solid dark squircle. It has no glass, no shadow, no translucency and no specular highlight.

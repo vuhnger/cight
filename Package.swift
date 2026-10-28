@@ -2,9 +2,9 @@
 import PackageDescription
 
 let package = Package(
-  name: "Cight",
+  name: "Peek",
   platforms: [.macOS("26.0")],
-  products: [.executable(name: "Cight", targets: ["Cight"])],
+  products: [.executable(name: "Peek", targets: ["Peek"])],
   dependencies: [
     .package(
       url: "https://github.com/sparkle-project/Sparkle",
@@ -12,13 +12,13 @@ let package = Package(
     )
   ],
   targets: [
-    .target(name: "CightCore"),
+    .target(name: "PeekCore"),
     .executableTarget(
-      name: "Cight",
-      dependencies: ["CightCore", .product(name: "Sparkle", package: "Sparkle")]),
+      name: "Peek",
+      dependencies: ["PeekCore", .product(name: "Sparkle", package: "Sparkle")]),
     .testTarget(
-      name: "CightCoreTests", dependencies: ["CightCore"], resources: [.copy("Fixtures")]),
-    .testTarget(name: "CightTests", dependencies: ["Cight", "CightCore"]),
+      name: "PeekCoreTests", dependencies: ["PeekCore"], resources: [.copy("Fixtures")]),
+    .testTarget(name: "PeekTests", dependencies: ["Peek", "PeekCore"]),
   ],
   swiftLanguageModes: [.v6]
 )
