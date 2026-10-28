@@ -136,7 +136,7 @@ final class PanelController: NSObject {
       onVisibilityChange(true)
       measureFirstFrame()
     }
-    if pinned { panel.makeKey() }
+    panel.makeKey()
   }
 
   private func hide() {
