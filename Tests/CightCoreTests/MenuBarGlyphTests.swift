@@ -20,12 +20,35 @@ private func repo(_ visible: [WorkflowRun], history: [WorkflowRun] = []) -> Menu
 }
 
 struct MenuBarGlyphTests {
-  @Test func failedBeatsEveryOtherState() {
+  @Test func aLiveRunBeatsFailedAndPassedRuns() {
     let runs = [
       running(id: 1), makeRun(id: 2, workflow: 2, conclusion: "failure"),
       makeRun(id: 3, workflow: 3),
     ]
-    #expect(MenuBarGlyphs.glyph(for: repo(runs), now: at(10)) == .failed)
+    #expect(MenuBarGlyphs.glyph(for: repo(runs), now: at(10)) == .running(progress: nil))
+  }
+
+  @Test func aNewerPassedRunBeatsAnOlderFailedRun() {
+    let runs = [
+      makeRun(id: 1, workflow: 1, conclusion: "failure", created: 0),
+      makeRun(id: 2, workflow: 2, created: 100),
+    ]
+    #expect(MenuBarGlyphs.glyph(for: repo(runs), now: at(200)) == .passed)
+  }
+
+  @Test func aNewerFailedRunBeatsAnOlderPassedRun() {
+    let runs = [
+      makeRun(id: 1, workflow: 1, created: 0),
+      makeRun(id: 2, workflow: 2, conclusion: "failure", created: 100),
+    ]
+    #expect(MenuBarGlyphs.glyph(for: repo(runs), now: at(200)) == .failed)
+  }
+
+  @Test func skippedAndCancelledRunsGiveNoGlyph() {
+    let runs = [
+      makeRun(id: 1, conclusion: "skipped"), makeRun(id: 2, workflow: 2, conclusion: "cancelled"),
+    ]
+    #expect(MenuBarGlyphs.glyph(for: repo(runs), now: at(10)) == nil)
   }
 
   @Test func passedQueuedAndRunningMapToTheirOwnGlyph() {

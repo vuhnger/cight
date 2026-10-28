@@ -24,13 +24,12 @@ public enum MenuBarGlyphs {
   private static let progressSteps = 12.0
 
   public static func glyph(for repo: MenuBarRepo, now: Date) -> MenuBarGlyph? {
-    switch RunState.mostUrgent(repo.visible.map(\.state)) {
-    case .failed: .failed
-    case .running: runningGlyph(repo, now: now)
-    case .queued: .queued
-    case .passed: .passed
-    case .neutral: nil
-    }
+    let states = repo.visible.map(\.state)
+    if states.contains(.running) { return runningGlyph(repo, now: now) }
+    if states.contains(.queued) { return .queued }
+    let finished = repo.visible.filter { $0.state == .failed || $0.state == .passed }
+    guard let newest = finished.max(by: { $0.activityDate < $1.activityDate }) else { return nil }
+    return newest.state == .failed ? .failed : .passed
   }
 
   public static func glyphs(repos: [MenuBarRepo], signedOut: Bool, now: Date) -> [MenuBarGlyph] {
