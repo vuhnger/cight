@@ -59,15 +59,17 @@ struct PanelRoot: View {
   var body: some View {
     let stale = isStale
     ScrollView(.vertical) {
-      VStack(spacing: Metrics.cardSpacing) {
-        if let notice = monitor.notice {
-          NoticeCard(notice: notice, retry: monitor.retry)
-        }
-        if monitor.showsRepos {
-          ForEach(monitor.repos) { repo in
-            RepoCard(repo: repo, open: open)
-              .grayscale(stale ? 1 : 0)
-              .opacity(stale ? 0.6 : 1)
+      GlassEffectContainer(spacing: 12) {
+        VStack(spacing: Metrics.cardSpacing) {
+          if let notice = monitor.notice {
+            NoticeCard(notice: notice, retry: monitor.retry)
+          }
+          if monitor.showsRepos {
+            ForEach(monitor.repos) { repo in
+              RepoCard(repo: repo, open: open)
+                .grayscale(stale ? 1 : 0)
+                .opacity(stale ? 0.6 : 1)
+            }
           }
         }
       }
@@ -106,7 +108,6 @@ struct NoticeCard: View {
     .padding(.horizontal, 16)
     .frame(height: Metrics.notice)
     .glassEffect(.regular.tint(.orange.opacity(0.3)), in: .rect(cornerRadius: Metrics.cardRadius))
-    .clipShape(.rect(cornerRadius: Metrics.cardRadius))
   }
 
   private var glyph: GlyphKind {
@@ -174,7 +175,6 @@ struct RepoCard: View {
     .padding(.vertical, Metrics.cardVertical)
     .frame(height: Metrics.height(of: repo), alignment: .top)
     .glassEffect(Metrics.cardGlass, in: .rect(cornerRadius: Metrics.cardRadius))
-    .clipShape(.rect(cornerRadius: Metrics.cardRadius))
   }
 
   private var header: some View {
