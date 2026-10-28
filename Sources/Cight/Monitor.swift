@@ -10,6 +10,7 @@ private struct RepoMeta: Sendable {
 
 private struct Fetched: Sendable {
   let id: String
+  let host: String
   let meta: RepoMeta
   let group: RepoGroup?
   let rawRuns: [WorkflowRun]
@@ -21,6 +22,29 @@ private struct Outcome: Sendable {
   let result: Result<Fetched, GitHubError>
 }
 
+@MainActor
+private final class Source {
+  let provider: any RunProvider
+  var viewer: String?
+  var discovery = Discovery(repos: [], error: nil)
+  var lastDiscovery = Date.distantPast
+  var discoveryForced = true
+  var errors: [GitHubError] = []
+  var lastError: GitHubError?
+  var failures = 0
+  var jitter = 0.0
+  var finishedAt = Date.distantPast
+  var task: Task<Void, Never>?
+  var anySuccess = false
+
+  init(provider: any RunProvider) {
+    self.provider = provider
+  }
+
+  var isGitHub: Bool { provider.host == Repo.githubHost }
+  var signedOut: Bool { errors.contains(.unauthorized) }
+}
+
 @MainActor @Observable
 final class Monitor {
   private(set) var repos: [RepoModel] = []
@@ -28,23 +52,19 @@ final class Monitor {
   private(set) var glyphs: [MenuBarGlyph] = [.idle]
   var onEvents: (([RunEvent]) -> Void)?
   var onSession: ((SessionState) -> Void)?
+  var onGitLabSession: ((SessionState) -> Void)?
 
-  @ObservationIgnored private var discovered: [Repo] = []
-  @ObservationIgnored private var lastDiscovery = Date.distantPast
-  @ObservationIgnored private var discoveryForced = true
-  @ObservationIgnored let client: any RunProvider
-  @ObservationIgnored private var viewer: String?
+  @ObservationIgnored private var sources: [Source]
+  @ObservationIgnored private let gitLabProviders: @Sendable () -> [any RunProvider]
+  @ObservationIgnored private var lastSourceRefresh = Date.distantPast
   @ObservationIgnored private var metas: [String: RepoMeta] = [:]
   @ObservationIgnored private var ghInstalled = true
-  @ObservationIgnored private var lastError: GitHubError?
-  @ObservationIgnored private var pollTask: Task<Void, Never>?
-  @ObservationIgnored private var rows: [Int: RunRowModel] = [:]
+  @ObservationIgnored private var rows: [String: RunRowModel] = [:]
   @ObservationIgnored private var models: [String: RepoModel] = [:]
   @ObservationIgnored private var menuInputs: [String: MenuBarRepo] = [:]
   @ObservationIgnored private var trackers: [String: RunTracker] = [:]
   @ObservationIgnored private var lastUpdated: Date?
   @ObservationIgnored private var lastPollStart = Date.distantPast
-  @ObservationIgnored private var failures = 0
   @ObservationIgnored private var panelVisible = false
   @ObservationIgnored private var hasActiveRun = false
   @ObservationIgnored private var woke = false
@@ -56,16 +76,23 @@ final class Monitor {
   @ObservationIgnored private var shownBuiltIn = BuiltInRuns.isShown(in: .standard)
 
   var showsRepos: Bool {
+    if !repos.isEmpty { return true }
     switch notice {
-    case .ghMissing, .signedOut, .noRecentRuns: false
-    default: true
+    case .ghMissing, .signedOut, .noRecentRuns: return false
+    default: return true
     }
   }
 
   init(
-    client: any RunProvider = GitHubClient(tokenProvider: { await GhTokenReader.read() })
+    github: any RunProvider = GitHubClient(tokenProvider: { await GhTokenReader.read() }),
+    gitLab: @escaping @Sendable () -> [any RunProvider] = {
+      GlabCLI.hosts().map { host in
+        GitLabClient(host: host, tokenProvider: { await GlabCLI.token(host: host) })
+      }
+    }
   ) {
-    self.client = client
+    sources = [Source(provider: github)]
+    gitLabProviders = gitLab
   }
 
   func start() {
@@ -74,10 +101,13 @@ final class Monitor {
       forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
     ) { [weak self] _ in
       MainActor.assumeIsolated {
-        self?.woke = true
-        self?.discoveryForced = true
-        self?.pollTask?.cancel()
-        self?.nudge()
+        guard let self else { return }
+        self.woke = true
+        for source in self.sources {
+          source.discoveryForced = true
+          source.task?.cancel()
+        }
+        self.nudge()
       }
     }
     defaultsObserver = NotificationCenter.default.addObserver(
@@ -104,75 +134,119 @@ final class Monitor {
     nudge()
   }
 
+  func pollOnce() async {
+    refreshSources(force: true)
+    let tasks = sources.map { start($0) }
+    for task in tasks { await task.value }
+  }
+
   private func nudge() {
     sleeper?.cancel()
   }
 
+  private func refreshSources(force: Bool = false) {
+    let now = Date()
+    guard force || now.timeIntervalSince(lastSourceRefresh) >= Self.sourceRefreshInterval else {
+      return
+    }
+    lastSourceRefresh = now
+    let fresh = gitLabProviders().filter { $0.host != Repo.githubHost }
+    var kept = [sources[0]]
+    for provider in fresh where !kept.contains(where: { $0.provider.host == provider.host }) {
+      kept.append(
+        sources.first { $0.provider.host == provider.host } ?? Source(provider: provider))
+    }
+    for source in sources where !kept.contains(where: { $0 === source }) { source.task?.cancel() }
+    sources = kept
+  }
+
+  private func remaining(for source: Source) -> TimeInterval {
+    let delay = PollPolicy.delay(
+      after: source.lastError, failures: source.failures, panelVisible: panelVisible,
+      hasActiveRun: hasActiveRun, wokeFromSleep: woke, now: source.finishedAt,
+      jitter: source.jitter)
+    return source.finishedAt.addingTimeInterval(delay).timeIntervalSinceNow
+  }
+
+  private func isDue(_ source: Source) -> Bool {
+    source.task == nil
+      && (remaining(for: source) <= 0
+        || (forced && PollPolicy.allowsForcedPoll(after: source.lastError)))
+  }
+
+  @discardableResult
+  private func start(_ source: Source) -> Task<Void, Never> {
+    if let running = source.task { return running }
+    lastPollStart = Date()
+    let task = Task {
+      await pollSource(source)
+      source.finishedAt = Date()
+      source.jitter = Double.random(in: 0...1)
+      source.task = nil
+      nudge()
+    }
+    source.task = task
+    return task
+  }
+
   private func run() async {
     while !Task.isCancelled {
-      lastPollStart = Date()
-      let task = Task { await poll() }
-      pollTask = task
-      await task.value
-      let finished = Date()
-      let error = lastError
-      let jitter = Double.random(in: 0...1)
-      while !Task.isCancelled {
-        let delay = PollPolicy.delay(
-          after: error, failures: failures, panelVisible: panelVisible,
-          hasActiveRun: hasActiveRun, wokeFromSleep: woke, now: finished, jitter: jitter)
-        let remaining = finished.addingTimeInterval(delay).timeIntervalSinceNow
-        if remaining <= 0 || (forced && PollPolicy.allowsForcedPoll(after: error)) { break }
-        let sleep = Task<Void, Never> { _ = try? await Task.sleep(for: .seconds(remaining)) }
-        sleeper = sleep
-        await sleep.value
-      }
+      refreshSources()
       if woke { await NetworkGate.waitUntilSatisfied(timeout: .seconds(2)) }
+      for source in sources where isDue(source) { start(source) }
       woke = false
       forced = false
+      let wait =
+        sources.filter { $0.task == nil }.map { remaining(for: $0) }.min()
+        ?? Self.sourceRefreshInterval
+      let sleep = Task<Void, Never> {
+        _ = try? await Task.sleep(for: .seconds(min(max(wait, 0.05), Self.sourceRefreshInterval)))
+      }
+      sleeper = sleep
+      await sleep.value
     }
   }
 
-  private func poll() async {
+  private func pollSource(_ source: Source) async {
     let login: String
     do {
-      login = try await viewerLogin()
+      login = try await viewerLogin(source)
     } catch {
       guard !(error is CancellationError), !Task.isCancelled else { return }
-      await finish(outcomes: [], errors: [error as? GitHubError ?? .transport(.unknown)])
+      await finish(source, outcomes: [], errors: [error as? GitHubError ?? .transport(.unknown)])
       return
     }
     var errors: [GitHubError] = []
     let now = Date()
-    if discoveryForced || now.timeIntervalSince(lastDiscovery) >= Self.discoveryInterval {
+    let provider = source.provider
+    if source.discoveryForced
+      || now.timeIntervalSince(source.lastDiscovery) >= Self.discoveryInterval
+    {
       let result = await RepoDiscovery.discover(
-        previous: discovered, now: now,
-        candidates: { [client] in try await client.repos() },
-        latestRun: { [client] repo in
-          let parts = repo.fullName.split(separator: "/").map(String.init)
-          guard parts.count == 2 else { return nil }
-          return try await client.latestRun(
-            owner: parts[0], name: parts[1], actor: login,
-            since: now.addingTimeInterval(-RepoDiscovery.window))
+        previous: source.discovery.repos, now: now,
+        candidates: { try await provider.repos() },
+        latestRun: { repo in
+          try await provider.latestRun(
+            repo: repo, actor: login, since: now.addingTimeInterval(-RepoDiscovery.window))
         })
       guard !Task.isCancelled else { return }
-      discovered = result.repos
       if let error = result.error {
         errors.append(error)
       } else {
-        lastDiscovery = now
-        discoveryForced = false
+        source.discovery = result
+        source.lastDiscovery = now
+        source.discoveryForced = false
       }
     }
-    let list = discovered
+    let list = source.discovery.repos
     let known = metas
     let showBuiltIn = BuiltInRuns.isShown(in: .standard)
     shownBuiltIn = showBuiltIn
-    let outcomes = await withTaskGroup(of: Outcome.self) { [client] group in
+    let outcomes = await withTaskGroup(of: Outcome.self) { group in
       for repo in list {
         group.addTask {
           await Self.fetch(
-            client: client, repo: repo, viewer: login, cached: known[repo.key], now: now,
+            client: provider, repo: repo, viewer: login, cached: known[repo.key], now: now,
             showBuiltIn: showBuiltIn)
         }
       }
@@ -184,32 +258,39 @@ final class Monitor {
     errors += outcomes.compactMap { outcome -> GitHubError? in
       if case .failure(let error) = outcome.result { error } else { nil }
     }
-    await finish(outcomes: outcomes, errors: errors)
+    await finish(source, outcomes: outcomes, errors: errors)
   }
 
-  private func finish(outcomes: [Outcome], errors: [GitHubError]) async {
+  private func finish(_ source: Source, outcomes: [Outcome], errors: [GitHubError]) async {
     let primary =
       errors.first { $0 == .unauthorized }
       ?? errors.first { if case .rateLimited = $0 { true } else { false } }
       ?? errors.first { $0 != .notFound }
     if primary == .unauthorized {
-      viewer = nil
-      ghInstalled = await Task.detached { GhTokenReader.isInstalled() }.value
+      source.viewer = nil
+      source.discovery = Discovery(repos: [], error: nil)
+      source.discoveryForced = true
+      if source.isGitHub {
+        ghInstalled = await Task.detached { GhTokenReader.isInstalled() }.value
+      }
     }
-    failures = PollPolicy.failures(after: primary, previous: failures)
-    lastError = primary
-    apply(outcomes: outcomes, errors: errors)
+    source.failures = PollPolicy.failures(after: primary, previous: source.failures)
+    source.lastError = primary
+    source.errors = errors
+    source.anySuccess = outcomes.contains { if case .success = $0.result { true } else { false } }
+    apply(outcomes: outcomes)
   }
 
-  private func viewerLogin() async throws -> String {
-    if let viewer { return viewer }
-    let login = try await client.viewer().login
-    viewer = login
+  private func viewerLogin(_ source: Source) async throws -> String {
+    if let viewer = source.viewer { return viewer }
+    let login = try await source.provider.viewer().login
+    source.viewer = login
     return login
   }
 
   private nonisolated static let metaLifetime: TimeInterval = 300
   private nonisolated static let discoveryInterval: TimeInterval = 300
+  private nonisolated static let sourceRefreshInterval: TimeInterval = 60
 
   private nonisolated static func fetch(
     client: any RunProvider, repo: Repo, viewer: String, cached: RepoMeta?, now: Date,
@@ -220,11 +301,10 @@ final class Monitor {
       if let cached, now.timeIntervalSince(cached.fetchedAt) < metaLifetime {
         meta = cached
       } else {
-        let branches = try? await client.branches(owner: repo.owner, name: repo.name)
+        let branches = try? await client.branches(repo: repo)
         meta = RepoMeta(repo: repo, branches: branches ?? cached?.branches, fetchedAt: now)
       }
-      let runs = BuiltInRuns.filter(
-        try await client.runs(owner: repo.owner, name: repo.name), shown: showBuiltIn)
+      let runs = BuiltInRuns.filter(try await client.runs(repo: repo), shown: showBuiltIn)
       let group = RunGrouping.groups(
         [
           RepoRuns(
@@ -238,7 +318,7 @@ final class Monitor {
         etas[run.id] = ETA.estimate(for: run, among: runs)
       }
       let fetched = Fetched(
-        id: repo.key, meta: meta, group: group,
+        id: repo.key, host: repo.host, meta: meta, group: group,
         rawRuns: runs, etas: etas)
       return Outcome(repo: repo, result: .success(fetched))
     } catch let error as GitHubError {
@@ -248,23 +328,25 @@ final class Monitor {
     }
   }
 
-  private func apply(outcomes: [Outcome], errors: [GitHubError]) {
-    let list = discovered
+  private func rowKey(_ repo: String, _ run: Int) -> String {
+    "\(repo)#\(run)"
+  }
+
+  private func apply(outcomes: [Outcome]) {
+    let list = RepoDiscovery.merge(sources.map(\.discovery))
     let now = Date()
-    if !outcomes.isEmpty,
-      outcomes.contains(where: { if case .success = $0.result { true } else { false } })
-    {
+    if outcomes.contains(where: { if case .success = $0.result { true } else { false } }) {
       lastUpdated = now
     }
     var events: [RunEvent] = []
-    var live = Set<Int>()
+    var live = Set<String>()
     var ordered: [RepoModel] = []
     for repo in list {
       let id = repo.key
-      let model = models[id] ?? RepoModel(owner: repo.owner, name: repo.name)
+      let model = models[id] ?? RepoModel(repo: repo)
       models[id] = model
-      guard let outcome = outcomes.first(where: { $0.repo.id == repo.id }) else {
-        if let last = menuInputs[id] { live.formUnion(last.visible.map(\.id)) }
+      guard let outcome = outcomes.first(where: { $0.repo.key == id }) else {
+        if let last = menuInputs[id] { live.formUnion(last.visible.map { rowKey(id, $0.id) }) }
         ordered.append(model)
         continue
       }
@@ -273,11 +355,11 @@ final class Monitor {
         if model.problem != nil { model.problem = nil }
         metas[id] = fetched.meta
         let visible = fetched.group?.branches.flatMap(\.runs) ?? []
-        live.formUnion(visible.map(\.id))
+        live.formUnion(visible.map { rowKey(id, $0.id) })
         apply(fetched, to: model)
         menuInputs[id] = MenuBarRepo(visible: visible, history: fetched.rawRuns)
         var tracker = trackers[id] ?? RunTracker()
-        events += tracker.ingest(repo: id, runs: fetched.rawRuns)
+        events += tracker.ingest(repo: id, runs: fetched.rawRuns, host: fetched.host)
         trackers[id] = tracker
       case .failure(.notFound):
         model.problem = .gone
@@ -287,7 +369,7 @@ final class Monitor {
         model.newest = nil
         menuInputs[id] = nil
       case .failure:
-        if let last = menuInputs[id] { live.formUnion(last.visible.map(\.id)) }
+        if let last = menuInputs[id] { live.formUnion(last.visible.map { rowKey(id, $0.id) }) }
       }
       ordered.append(model)
     }
@@ -302,20 +384,27 @@ final class Monitor {
     trackers = trackers.filter { ids.contains($0.key) }
     rows = rows.filter { live.contains($0.key) }
 
-    let unauthorized = errors.contains(.unauthorized)
-    let newNotice = NoticePolicy.notice(
-      ghInstalled: ghInstalled,
-      tokenAvailable: true, repoCount: list.count, errors: errors, lastUpdated: lastUpdated)
+    let github = sources.first { $0.isGitHub }
+    let gitLabs = sources.filter { !$0.isGitHub }
+    let githubErrors = !ghInstalled && !gitLabs.isEmpty ? [] : github?.errors ?? []
+    let githubNotice = NoticePolicy.notice(
+      ghInstalled: ghInstalled || !gitLabs.isEmpty,
+      tokenAvailable: true, repoCount: list.count, errors: githubErrors, lastUpdated: lastUpdated)
+    let gitLabSignedOut = gitLabs.contains { $0.signedOut }
+    let newNotice = NoticePolicy.combined(github: githubNotice, gitLabSignedOut: gitLabSignedOut)
     if newNotice != notice { notice = newNotice }
+    let githubSignedOut = githubErrors.contains(.unauthorized) || githubNotice == .ghMissing
     let newGlyphs = MenuBarGlyphs.glyphs(
       repos: newOrder.compactMap { menuInputs[$0.id] },
-      signedOut: unauthorized || newNotice == .ghMissing,
+      signedOut: (githubSignedOut || gitLabSignedOut) && newOrder.isEmpty,
       now: now)
     if newGlyphs != glyphs { glyphs = newGlyphs }
     onSession?(
       SessionPolicy.sample(
-        signedOutSignal: unauthorized || newNotice == .ghMissing,
-        anySuccess: outcomes.contains { if case .success = $0.result { true } else { false } }))
+        signedOutSignal: githubSignedOut, anySuccess: github?.anySuccess ?? false))
+    onGitLabSession?(
+      SessionPolicy.sample(
+        signedOutSignal: gitLabSignedOut, anySuccess: gitLabs.contains { $0.anySuccess }))
     hasActiveRun = menuInputs.values.contains {
       $0.visible.contains { $0.state == .running || $0.state == .queued }
     }
@@ -328,12 +417,13 @@ final class Monitor {
         name: branch.branch,
         rows: branch.runs.map { run in
           let eta = fetched.etas[run.id]
-          if let row = rows[run.id] {
-            row.update(run: run, eta: eta)
+          let key = rowKey(fetched.id, run.id)
+          if let row = rows[key] {
+            row.update(run: run, eta: eta, host: fetched.host)
             return row
           }
-          let row = RunRowModel(run: run, eta: eta)
-          rows[run.id] = row
+          let row = RunRowModel(run: run, eta: eta, host: fetched.host)
+          rows[key] = row
           return row
         })
     }
@@ -345,9 +435,4 @@ final class Monitor {
     let newest = visible.map(\.activityDate).max()
     if newest != model.newest { model.newest = newest }
   }
-}
-
-extension Repo {
-  fileprivate var owner: String { String(fullName.split(separator: "/").first ?? "") }
-  fileprivate var key: String { fullName.lowercased() }
 }

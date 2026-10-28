@@ -1,0 +1,4 @@
+[
+  {"id":101,"name":"Api Service","path":"api","path_with_namespace":"acme/platform/api","default_branch":"main","last_activity_at":"2026-10-27T18:30:12.345Z","archived":false},
+  {"id":102,"name":"Docs","path":"docs","path_with_namespace":"acme/docs","default_branch":null,"last_activity_at":"2026-10-20T09:00:00+02:00","archived":false}
+]

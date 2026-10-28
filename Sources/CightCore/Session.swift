@@ -14,16 +14,18 @@ public enum SessionPolicy {
 }
 
 public struct SignOutGate {
-  private static let key = "signOutNotified"
+  public static let gitLabKey = "gitLabSignOutNotified"
   private static let required = 2
 
+  private let key: String
   private let defaults: UserDefaults
   private var consecutive = 0
   private var notified: Bool
 
-  public init(defaults: UserDefaults) {
+  public init(defaults: UserDefaults, key: String = "signOutNotified") {
+    self.key = key
     self.defaults = defaults
-    notified = defaults.bool(forKey: Self.key)
+    notified = defaults.bool(forKey: key)
   }
 
   public mutating func shouldNotify(_ state: SessionState) -> Bool {
@@ -47,6 +49,6 @@ public struct SignOutGate {
   private mutating func setNotified(_ value: Bool) {
     guard notified != value else { return }
     notified = value
-    defaults.set(value, forKey: Self.key)
+    defaults.set(value, forKey: key)
   }
 }

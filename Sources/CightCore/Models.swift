@@ -12,14 +12,46 @@ extension JSONDecoder {
 public struct Viewer: Decodable, Sendable, Equatable {
   public let id: Int
   public let login: String
+
+  public init(id: Int, login: String) {
+    self.id = id
+    self.login = login
+  }
 }
 
 public struct Repo: Decodable, Sendable, Equatable, Identifiable {
+  public static let githubHost = "github.com"
+
   public let id: Int
   public let name: String
   public let fullName: String
   public let defaultBranch: String
   public let pushedAt: Date?
+  public var host = Repo.githubHost
+
+  private enum CodingKeys: String, CodingKey {
+    case id, name, fullName, defaultBranch, pushedAt
+  }
+
+  public init(
+    id: Int, name: String, fullName: String, defaultBranch: String, pushedAt: Date?,
+    host: String = Repo.githubHost
+  ) {
+    self.id = id
+    self.name = name
+    self.fullName = fullName
+    self.defaultBranch = defaultBranch
+    self.pushedAt = pushedAt
+    self.host = host
+  }
+
+  public var key: String {
+    (host == Self.githubHost ? fullName : "\(host)/\(fullName)").lowercased()
+  }
+
+  public var owner: String {
+    String(fullName.dropLast(name.count + 1))
+  }
 }
 
 public struct Branch: Decodable, Sendable, Equatable {
@@ -29,15 +61,29 @@ public struct Branch: Decodable, Sendable, Equatable {
 public struct Account: Decodable, Sendable, Equatable {
   public let login: String
   public let avatarUrl: String?
+
+  public init(login: String, avatarUrl: String? = nil) {
+    self.login = login
+    self.avatarUrl = avatarUrl
+  }
 }
 
 public struct RepoRef: Decodable, Sendable, Equatable {
   public let id: Int
   public let fullName: String?
+
+  public init(id: Int, fullName: String?) {
+    self.id = id
+    self.fullName = fullName
+  }
 }
 
 public struct PullRequestRef: Decodable, Sendable, Equatable {
   public let number: Int
+
+  public init(number: Int) {
+    self.number = number
+  }
 }
 
 public struct WorkflowRun: Decodable, Sendable, Equatable, Identifiable {
@@ -58,6 +104,33 @@ public struct WorkflowRun: Decodable, Sendable, Equatable, Identifiable {
   public let actor: Account?
   public let triggeringActor: Account?
   public let headRepository: RepoRef?
+  public let isMergeRequest: Bool?
+
+  public init(
+    id: Int, workflowId: Int, createdAt: Date, name: String?, displayTitle: String?,
+    status: String?, conclusion: String?, event: String?, headBranch: String?,
+    pullRequests: [PullRequestRef]?, runStartedAt: Date?, updatedAt: Date?, htmlUrl: String?,
+    actor: Account?, headRepository: RepoRef?, isMergeRequest: Bool
+  ) {
+    self.id = id
+    self.workflowId = workflowId
+    self.createdAt = createdAt
+    self.name = name
+    self.displayTitle = displayTitle
+    self.status = status
+    self.conclusion = conclusion
+    self.event = event
+    self.headBranch = headBranch
+    self.pullRequests = pullRequests
+    self.runAttempt = nil
+    self.runStartedAt = runStartedAt
+    self.updatedAt = updatedAt
+    self.htmlUrl = htmlUrl
+    self.actor = actor
+    self.triggeringActor = nil
+    self.headRepository = headRepository
+    self.isMergeRequest = isMergeRequest
+  }
 
   public var state: RunState {
     RunState(status: status, conclusion: conclusion)
@@ -65,6 +138,13 @@ public struct WorkflowRun: Decodable, Sendable, Equatable, Identifiable {
 
   public var branch: String {
     headBranch ?? "unknown"
+  }
+
+  public func link(host: String) -> URL? {
+    guard let htmlUrl, let url = URL(string: htmlUrl), url.scheme == "https",
+      url.host?.lowercased() == host.split(separator: ":").first?.lowercased()
+    else { return nil }
+    return url
   }
 
   public var pullRequestNumber: Int? {

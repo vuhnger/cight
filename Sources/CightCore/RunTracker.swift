@@ -10,6 +10,7 @@ public struct RunEvent: Sendable, Equatable {
   public let kind: Kind
   public let repo: String
   public let run: WorkflowRun
+  public var host = Repo.githubHost
 }
 
 public struct RunTracker: Sendable {
@@ -46,7 +47,9 @@ public struct RunTracker: Sendable {
 
   public init() {}
 
-  public mutating func ingest(repo: String, runs: [WorkflowRun]) -> [RunEvent] {
+  public mutating func ingest(
+    repo: String, runs: [WorkflowRun], host: String = Repo.githubHost
+  ) -> [RunEvent] {
     let isBaseline = baselinedRepos.insert(repo).inserted
     let latest = RunGrouping.latestRuns(runs)
     let present = Set(latest.map(\.id))
@@ -68,7 +71,7 @@ public struct RunTracker: Sendable {
       if fired.insert(Fired(repo: repo, kind: kind, runId: run.id, attempt: run.runAttempt))
         .inserted
       {
-        events.append(RunEvent(kind: kind, repo: repo, run: run))
+        events.append(RunEvent(kind: kind, repo: repo, run: run, host: host))
       }
     }
     return events

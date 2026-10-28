@@ -3,6 +3,13 @@ import Foundation
 public struct Discovery: Sendable, Equatable {
   public let repos: [Repo]
   public let error: GitHubError?
+  public let newest: [String: Date]
+
+  public init(repos: [Repo], error: GitHubError?, newest: [String: Date] = [:]) {
+    self.repos = repos
+    self.error = error
+    self.newest = newest
+  }
 }
 
 public enum RepoDiscovery {
@@ -40,9 +47,20 @@ public enum RepoDiscovery {
         return all
       }
       let ordered = found.sorted { ($1.1, $0.0.fullName) < ($0.1, $1.0.fullName) }
-      return Discovery(repos: ordered.prefix(cap).map(\.0), error: nil)
+      let kept = ordered.prefix(cap)
+      return Discovery(
+        repos: kept.map(\.0), error: nil,
+        newest: Dictionary(uniqueKeysWithValues: kept.map { ($0.0.key, $0.1) }))
     } catch {
       return Discovery(repos: previous, error: error as? GitHubError ?? .transport(.unknown))
     }
+  }
+
+  public static func merge(_ discoveries: [Discovery]) -> [Repo] {
+    let all = discoveries.flatMap { discovery in
+      discovery.repos.map { ($0, discovery.newest[$0.key] ?? .distantPast) }
+    }
+    let ordered = all.sorted { ($1.1, $0.0.key) < ($0.1, $1.0.key) }
+    return ordered.prefix(cap).map(\.0)
   }
 }

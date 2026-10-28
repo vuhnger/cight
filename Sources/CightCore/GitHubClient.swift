@@ -15,6 +15,7 @@ public actor GitHubClient: RunProvider {
   private static let timeout: TimeInterval = 15
   private static let pageSize = 100
 
+  public nonisolated let host = Repo.githubHost
   private let session: URLSession
   private let tokenProvider: @Sendable () async -> String?
   private let now: @Sendable () -> Date
@@ -66,6 +67,27 @@ public actor GitHubClient: RunProvider {
     let path = "repos/\(try segment(owner))/\(try segment(name))/branches?per_page=100"
     let page: [Branch] = try await get(path)
     return page.count < Self.pageSize ? Set(page.map(\.name)) : nil
+  }
+
+  public func latestRun(repo: Repo, actor: String, since: Date) async throws -> WorkflowRun? {
+    let (owner, name) = try parts(repo)
+    return try await latestRun(owner: owner, name: name, actor: actor, since: since)
+  }
+
+  public func runs(repo: Repo) async throws -> [WorkflowRun] {
+    let (owner, name) = try parts(repo)
+    return try await runs(owner: owner, name: name)
+  }
+
+  public func branches(repo: Repo) async throws -> Set<String>? {
+    let (owner, name) = try parts(repo)
+    return try await branches(owner: owner, name: name)
+  }
+
+  private func parts(_ repo: Repo) throws -> (String, String) {
+    let parts = repo.fullName.split(separator: "/").map(String.init)
+    guard parts.count == 2 else { throw GitHubError.notFound }
+    return (parts[0], parts[1])
   }
 
   private func segment(_ value: String) throws -> String {
@@ -164,7 +186,7 @@ public actor GitHubClient: RunProvider {
   }
 }
 
-private final class RedirectPolicy: NSObject, URLSessionTaskDelegate {
+final class RedirectPolicy: NSObject, URLSessionTaskDelegate {
   private let token: String
   private let apiHost: String
 

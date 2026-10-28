@@ -1,10 +1,10 @@
 import Foundation
 
 public protocol RunProvider: Sendable {
+  nonisolated var host: String { get }
   func viewer() async throws -> Viewer
   func repos() async throws -> [Repo]
-  func latestRun(owner: String, name: String, actor: String, since: Date) async throws
-    -> WorkflowRun?
-  func runs(owner: String, name: String) async throws -> [WorkflowRun]
-  func branches(owner: String, name: String) async throws -> Set<String>?
+  func latestRun(repo: Repo, actor: String, since: Date) async throws -> WorkflowRun?
+  func runs(repo: Repo) async throws -> [WorkflowRun]
+  func branches(repo: Repo) async throws -> Set<String>?
 }

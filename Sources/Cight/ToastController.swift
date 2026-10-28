@@ -203,7 +203,8 @@ struct ToastCard: View {
             .lineLimit(2).fixedSize(horizontal: false, vertical: true)
           Spacer(minLength: 0)
           if let number = content.pullRequest {
-            Text("#\(number)").font(.callout.monospacedDigit()).foregroundStyle(.secondary)
+            Text("\(content.isMergeRequest ? "!" : "#")\(number)").font(.callout.monospacedDigit())
+              .foregroundStyle(.secondary)
           }
         }
       }
