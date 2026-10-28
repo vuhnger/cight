@@ -8,6 +8,7 @@ final class RunRowModel: Identifiable {
   let id: Int
   private(set) var workflow: String
   private(set) var pullRequest: Int?
+  private(set) var isMergeRequest: Bool
   private(set) var title: String
   private(set) var state: RunState
   private(set) var starter: String
@@ -19,29 +20,31 @@ final class RunRowModel: Identifiable {
   private(set) var samples: Int
   private static let workflowWidthCap: CGFloat = 150
 
-  init(run: WorkflowRun, eta: ETAEstimate?) {
+  init(run: WorkflowRun, eta: ETAEstimate?, host: String = Repo.githubHost) {
     id = run.id
     workflow = run.name ?? "Workflow"
     pullRequest = run.pullRequestNumber
+    isMergeRequest = run.isMergeRequest == true
     title = run.displayTitle ?? ""
     state = run.state
     starter = Formatting.login(run.actor?.login ?? "")
     avatar = AvatarCache.url(run.actor?.avatarUrl)
-    url = Self.webURL(run.htmlUrl)
+    url = Self.webURL(run.htmlUrl, host: host)
     startedAt = run.runStartedAt ?? run.createdAt
     activityAt = run.activityDate
     median = eta?.median
     samples = eta?.sampleCount ?? 0
   }
 
-  func update(run: WorkflowRun, eta: ETAEstimate?) {
+  func update(run: WorkflowRun, eta: ETAEstimate?, host: String = Repo.githubHost) {
     set(\.workflow, run.name ?? "Workflow")
     set(\.pullRequest, run.pullRequestNumber)
+    set(\.isMergeRequest, run.isMergeRequest == true)
     set(\.title, run.displayTitle ?? "")
     set(\.state, run.state)
     set(\.starter, Formatting.login(run.actor?.login ?? ""))
     set(\.avatar, AvatarCache.url(run.actor?.avatarUrl))
-    set(\.url, Self.webURL(run.htmlUrl))
+    set(\.url, Self.webURL(run.htmlUrl, host: host))
     set(\.startedAt, run.runStartedAt ?? run.createdAt)
     set(\.activityAt, run.activityDate)
     set(\.median, eta?.median)
@@ -65,9 +68,9 @@ final class RunRowModel: Identifiable {
     if self[keyPath: path] != value { self[keyPath: path] = value }
   }
 
-  private static func webURL(_ string: String?) -> URL? {
+  private static func webURL(_ string: String?, host: String) -> URL? {
     guard let string, let url = URL(string: string), url.scheme == "https",
-      url.host == "github.com"
+      url.host == host.split(separator: ":").first.map(String.init)
     else { return nil }
     return url
   }
@@ -99,10 +102,10 @@ final class RepoModel: Identifiable {
   var problem: RepoProblem?
   var userExpanded: Bool?
 
-  init(owner: String, name: String) {
-    id = "\(owner)/\(name)".lowercased()
-    self.owner = owner
-    self.name = name
+  init(repo: Repo) {
+    id = repo.key
+    owner = repo.owner
+    name = repo.name
   }
 
   var hasActiveRun: Bool {

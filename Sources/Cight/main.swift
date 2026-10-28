@@ -63,6 +63,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let notifier = Notifier(defaults: .standard, show: { toasts.show($0) })
     monitor.onEvents = { notifier.deliver($0) }
     monitor.onSession = { notifier.observe($0) }
+    monitor.onGitLabSession = { notifier.observeGitLab($0) }
     self.toasts = toasts
     self.notifier = notifier
 

@@ -93,7 +93,7 @@ struct NoticeCard: View {
         .font(.callout)
         .lineLimit(2)
         .frame(maxWidth: .infinity, alignment: .leading)
-      if notice == .signedOut {
+      if notice == .signedOut || notice == .gitLabSignedOut {
         Button("Retry", action: retry).buttonStyle(.borderedProminent)
       }
     }
@@ -103,13 +103,15 @@ struct NoticeCard: View {
   }
 
   private var glyph: GlyphKind {
-    notice == .signedOut ? .signedOut : .warning
+    notice == .signedOut || notice == .gitLabSignedOut ? .signedOut : .warning
   }
 
   @ViewBuilder private var content: some View {
     switch notice {
     case .signedOut:
       Text("GitHub rejected the token. Run gh auth login in Terminal.")
+    case .gitLabSignedOut:
+      Text("GitLab rejected the token. Run glab auth login in Terminal.")
     case .ghMissing:
       Text("The gh command is missing. Install it with brew install gh, then run gh auth login.")
     case .noRecentRuns:
@@ -235,7 +237,9 @@ struct RunRow: View {
           Text(row.workflow).fontWeight(.medium).lineLimit(1)
             .frame(width: row.workflowWidth, alignment: .leading).layoutPriority(1)
           if let number = row.pullRequest {
-            Text("#\(number)").monospacedDigit().foregroundStyle(.tertiary).layoutPriority(2)
+            Text("\(row.isMergeRequest ? "!" : "#")\(number)").monospacedDigit().foregroundStyle(
+              .tertiary
+            ).layoutPriority(2)
           }
           AvatarView(url: row.avatar, login: row.starter)
           Text(row.title).foregroundStyle(.secondary).lineLimit(1)

@@ -3,6 +3,7 @@ import Foundation
 public enum PanelNotice: Sendable, Equatable {
   case ghMissing
   case signedOut
+  case gitLabSignedOut
   case noRecentRuns
   case rateLimited(until: Date)
   case offline(since: Date?)
@@ -25,5 +26,12 @@ public enum NoticePolicy {
     }
     if errors.contains(where: { $0 != .notFound }) { return .unavailable(since: lastUpdated) }
     return repoCount == 0 ? .noRecentRuns : nil
+  }
+
+  public static func combined(github: PanelNotice?, gitLabSignedOut: Bool) -> PanelNotice? {
+    switch github {
+    case nil, .noRecentRuns: gitLabSignedOut ? .gitLabSignedOut : github
+    default: github
+    }
   }
 }

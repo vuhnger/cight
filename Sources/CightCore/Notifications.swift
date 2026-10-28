@@ -52,6 +52,11 @@ public struct ToastContent: Sendable, Equatable {
   public let line2: String
   public let pullRequest: Int?
   public let url: URL?
+  public var isMergeRequest = false
+
+  public static let gitLabSignedOut = ToastContent(
+    glyph: .signedOut, line1: "Signed out of GitLab",
+    line2: "Run glab auth login in Terminal to resume monitoring.", pullRequest: nil, url: nil)
 
   public static let signedOut = ToastContent(
     glyph: .signedOut, line1: "Signed out of GitHub",
@@ -68,6 +73,7 @@ public struct ToastContent: Sendable, Equatable {
       }
     return ToastContent(
       glyph: glyph, line1: event.repo, line2: "\(run.name ?? "Workflow") \(verb) on \(run.branch)",
-      pullRequest: run.pullRequestNumber, url: run.htmlUrl.flatMap(URL.init))
+      pullRequest: run.pullRequestNumber, url: run.htmlUrl.flatMap(URL.init),
+      isMergeRequest: run.isMergeRequest == true)
   }
 }
