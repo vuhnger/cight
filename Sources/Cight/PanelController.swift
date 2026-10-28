@@ -20,7 +20,9 @@ func track<Value>(
   let value = withObservationTracking {
     read()
   } onChange: {
-    Task { @MainActor in track(read, apply: apply) }
+    RunLoop.main.perform(inModes: [.common]) {
+      MainActor.assumeIsolated { track(read, apply: apply) }
+    }
   }
   apply(value)
 }
