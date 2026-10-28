@@ -35,7 +35,9 @@ public enum MenuBarGlyphs {
 
   public static func glyphs(repos: [MenuBarRepo], signedOut: Bool, now: Date) -> [MenuBarGlyph] {
     if signedOut { return [.signedOut] }
-    let active = repos.compactMap { glyph(for: $0, now: now) }.filter { $0 != .passed }
+    let active = repos.compactMap { glyph(for: $0, now: now) }.filter {
+      $0 != .passed && $0 != .failed
+    }
     return active.isEmpty ? [.idle] : active
   }
 
