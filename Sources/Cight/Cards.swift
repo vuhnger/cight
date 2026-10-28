@@ -263,7 +263,9 @@ private struct RowGlyph: View {
       TimelineView(.periodic(from: .now, by: 1)) { context in
         let progress = row.progress(at: context.date)
         StateGlyph(
-          kind: progress?.isOverdue == true ? .overdue : .running(progress?.fraction), size: 13)
+          kind: progress?.isOverdue == true ? .overdue : .running(progress?.fraction), size: 13
+        )
+        .animation(.linear(duration: 1), value: progress?.fraction)
       }
     } else {
       StateGlyph(kind: GlyphKind(row.state), size: 13)
@@ -309,6 +311,7 @@ private struct RowBar: View {
         .overlay(alignment: .leading) {
           Capsule().fill(progress?.isOverdue == true ? Color.orange : amber)
             .scaleEffect(x: progress?.fraction ?? 0, y: 1, anchor: .leading)
+            .animation(.linear(duration: 1), value: progress?.fraction)
         }
         .padding(.leading, 20)
     }
