@@ -18,6 +18,7 @@ private struct GeneralPane: View {
   @Bindable var notifier: Notifier
   var updates: UpdateChecker
   var launchAtLogin: LaunchAtLogin
+  @AppStorage(BuiltInRuns.key) private var showBuiltIn = false
 
   var body: some View {
     VStack(alignment: .leading, spacing: 14) {
@@ -29,6 +30,7 @@ private struct GeneralPane: View {
       if let error = launchAtLogin.error {
         Text(error).foregroundStyle(.orange).font(.callout)
       }
+      Toggle("Show GitHub's built-in runs, like Dependabot and CodeQL", isOn: $showBuiltIn)
 
       Divider()
 

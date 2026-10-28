@@ -52,6 +52,8 @@ final class Monitor {
   @ObservationIgnored private var loop: Task<Void, Never>?
   @ObservationIgnored private var sleeper: Task<Void, Never>?
   @ObservationIgnored private var wakeObserver: (any NSObjectProtocol)?
+  @ObservationIgnored private var defaultsObserver: (any NSObjectProtocol)?
+  @ObservationIgnored private var shownBuiltIn = BuiltInRuns.isShown(in: .standard)
 
   var showsRepos: Bool {
     switch notice {
@@ -76,6 +78,14 @@ final class Monitor {
         self?.discoveryForced = true
         self?.pollTask?.cancel()
         self?.nudge()
+      }
+    }
+    defaultsObserver = NotificationCenter.default.addObserver(
+      forName: UserDefaults.didChangeNotification, object: nil, queue: .main
+    ) { [weak self] _ in
+      MainActor.assumeIsolated {
+        guard let self, BuiltInRuns.isShown(in: .standard) != self.shownBuiltIn else { return }
+        self.retry()
       }
     }
     loop = Task { await run() }
@@ -156,11 +166,14 @@ final class Monitor {
     }
     let list = discovered
     let known = metas
+    let showBuiltIn = BuiltInRuns.isShown(in: .standard)
+    shownBuiltIn = showBuiltIn
     let outcomes = await withTaskGroup(of: Outcome.self) { [client] group in
       for repo in list {
         group.addTask {
           await Self.fetch(
-            client: client, repo: repo, viewer: login, cached: known[repo.key], now: now)
+            client: client, repo: repo, viewer: login, cached: known[repo.key], now: now,
+            showBuiltIn: showBuiltIn)
         }
       }
       var all: [Outcome] = []
@@ -199,7 +212,8 @@ final class Monitor {
   private nonisolated static let discoveryInterval: TimeInterval = 300
 
   private nonisolated static func fetch(
-    client: GitHubClient, repo: Repo, viewer: String, cached: RepoMeta?, now: Date
+    client: GitHubClient, repo: Repo, viewer: String, cached: RepoMeta?, now: Date,
+    showBuiltIn: Bool
   ) async -> Outcome {
     do {
       let meta: RepoMeta
@@ -209,7 +223,8 @@ final class Monitor {
         let branches = try? await client.branches(owner: repo.owner, name: repo.name)
         meta = RepoMeta(repo: repo, branches: branches ?? cached?.branches, fetchedAt: now)
       }
-      let runs = try await client.runs(owner: repo.owner, name: repo.name)
+      let runs = BuiltInRuns.filter(
+        try await client.runs(owner: repo.owner, name: repo.name), shown: showBuiltIn)
       let group = RunGrouping.groups(
         [
           RepoRuns(
