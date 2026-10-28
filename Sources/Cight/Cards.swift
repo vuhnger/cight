@@ -1,3 +1,4 @@
+import AppKit
 import CightCore
 import SwiftUI
 
@@ -23,7 +24,9 @@ enum Metrics {
   static let menuBarGlyph: CGFloat = 15
   static let settingsInnerSpacing: CGFloat = 6
   static let glyphGap: CGFloat = 10
-  static var cardGlass: Glass { .regular.tint(.black.opacity(0.35)) }
+  static var panelRadius: CGFloat { cardRadius + outerPadding }
+  static let tileFill = Color.white.opacity(0.08)
+  static let noticeFill = Color.orange.opacity(0.25)
 
   @MainActor
   static func height(of repo: RepoModel) -> CGFloat {
@@ -52,6 +55,27 @@ enum Metrics {
   }
 }
 
+struct BlurBackground: NSViewRepresentable {
+  let radius: CGFloat
+
+  func makeNSView(context: Context) -> NSVisualEffectView {
+    let view = NSVisualEffectView()
+    view.blendingMode = .behindWindow
+    view.state = .active
+    view.material = .hudWindow
+    view.appearance = NSAppearance(named: .darkAqua)
+    view.wantsLayer = true
+    view.layer?.cornerRadius = radius
+    view.layer?.cornerCurve = .continuous
+    view.layer?.masksToBounds = true
+    return view
+  }
+
+  func updateNSView(_ view: NSVisualEffectView, context: Context) {
+    view.layer?.cornerRadius = radius
+  }
+}
+
 struct PanelRoot: View {
   let monitor: Monitor
   let open: (URL) -> Void
@@ -76,6 +100,7 @@ struct PanelRoot: View {
     .scrollIndicators(.hidden)
     .focusEffectDisabled()
     .scrollBounceBehavior(.basedOnSize)
+    .background(BlurBackground(radius: Metrics.panelRadius))
     .frame(width: Metrics.panelWidth, alignment: .top)
     .preferredColorScheme(.dark)
   }
@@ -105,8 +130,7 @@ struct NoticeCard: View {
     }
     .padding(.horizontal, 16)
     .frame(height: Metrics.notice)
-    .glassEffect(.regular.tint(.orange.opacity(0.3)), in: .rect(cornerRadius: Metrics.cardRadius))
-    .clipShape(.rect(cornerRadius: Metrics.cardRadius))
+    .background(Metrics.noticeFill, in: .rect(cornerRadius: Metrics.cardRadius))
   }
 
   private var glyph: GlyphKind {
@@ -173,8 +197,7 @@ struct RepoCard: View {
     .padding(.horizontal, Metrics.cardHorizontal)
     .padding(.vertical, Metrics.cardVertical)
     .frame(height: Metrics.height(of: repo), alignment: .top)
-    .glassEffect(Metrics.cardGlass, in: .rect(cornerRadius: Metrics.cardRadius))
-    .clipShape(.rect(cornerRadius: Metrics.cardRadius))
+    .background(Metrics.tileFill, in: .rect(cornerRadius: Metrics.cardRadius))
   }
 
   private var header: some View {

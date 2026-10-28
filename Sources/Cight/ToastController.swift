@@ -67,7 +67,7 @@ final class ToastController {
     panel.hidesOnDeactivate = false
     panel.isOpaque = false
     panel.backgroundColor = .clear
-    panel.hasShadow = false
+    panel.hasShadow = true
     panel.appearance = NSAppearance(named: .darkAqua)
     hosting.rootView = ToastStackView(
       model: model,
@@ -164,6 +164,7 @@ final class ToastController {
         y: screen.maxY - PanelPlacement.gap - size.height)
     }
     panel.setFrame(NSRect(origin: origin, size: size), display: true)
+    panel.invalidateShadow()
     panel.orderFrontRegardless()
   }
 }
@@ -211,8 +212,7 @@ struct ToastCard: View {
     .padding(.horizontal, Metrics.cardHorizontal)
     .padding(.vertical, Metrics.cardVertical)
     .frame(width: Metrics.toastWidth, alignment: .leading)
-    .glassEffect(Metrics.cardGlass, in: .rect(cornerRadius: Metrics.cardRadius))
-    .clipShape(.rect(cornerRadius: Metrics.cardRadius))
+    .background(BlurBackground(radius: Metrics.cardRadius))
   }
 
   @ViewBuilder private var header: some View {

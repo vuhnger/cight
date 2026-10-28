@@ -65,7 +65,7 @@ final class PanelController: NSObject {
     panel.hidesOnDeactivate = false
     panel.isOpaque = false
     panel.backgroundColor = .clear
-    panel.hasShadow = false
+    panel.hasShadow = true
     panel.appearance = NSAppearance(named: .darkAqua)
     panel.onCancel = { [weak self] in self?.send(.escape) }
     track({ Metrics.height(of: monitor) }, apply: { [weak self] _ in self?.resize() })
@@ -184,6 +184,7 @@ final class PanelController: NSObject {
     panel.setFrame(
       NSRect(x: frame.minX, y: frame.maxY - height, width: Metrics.panelWidth, height: height),
       display: false)
+    panel.invalidateShadow()
   }
 
   private func position() {
@@ -199,6 +200,7 @@ final class PanelController: NSObject {
         panelSize: size)
     {
       panel.setFrame(NSRect(origin: origin, size: size), display: false)
+      panel.invalidateShadow()
       return
     }
     let screen = NSScreen.main?.visibleFrame ?? screenFrame()
@@ -207,6 +209,7 @@ final class PanelController: NSObject {
         x: screen.maxX - size.width - PanelPlacement.margin + inset,
         y: screen.maxY - PanelPlacement.gap + inset - size.height, width: size.width,
         height: size.height), display: false)
+    panel.invalidateShadow()
   }
 
   private func watchOutsideClicks() {
