@@ -23,6 +23,7 @@ enum Metrics {
   static let menuBarGlyph: CGFloat = 15
   static let settingsInnerSpacing: CGFloat = 6
   static let glyphGap: CGFloat = 10
+  static let pressedOpacity: Double = 0.6
   static var cardGlass: Glass { .regular.tint(.black.opacity(0.35)) }
 
   @MainActor
@@ -232,9 +233,18 @@ struct RelativeTime: View {
   }
 }
 
+private struct PressDimStyle: ButtonStyle {
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label.opacity(configuration.isPressed ? Metrics.pressedOpacity : 1)
+  }
+}
+
 struct RunRow: View {
   let row: RunRowModel
   let open: (URL) -> Void
+  @State private var hovered = false
+
+  private var highlighted: Bool { hovered && row.url != nil }
 
   var body: some View {
     Button {
@@ -251,9 +261,15 @@ struct RunRow: View {
             ).layoutPriority(2)
           }
           AvatarView(url: row.avatar, login: row.starter)
-          Text(row.title).foregroundStyle(.secondary).lineLimit(1)
+          Text(row.title).foregroundStyle(highlighted ? .primary : .secondary).lineLimit(1)
           Spacer(minLength: 8)
-          RowTrailing(row: row).layoutPriority(2)
+          RowTrailing(row: row).opacity(highlighted ? 0 : 1).layoutPriority(2)
+            .overlay(alignment: .trailing) {
+              if highlighted {
+                Image(systemName: "arrow.up.right")
+                  .font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
+              }
+            }
         }
         .frame(height: Metrics.row)
         if row.state == .running, row.median != nil {
@@ -263,7 +279,8 @@ struct RunRow: View {
       .font(.callout)
       .contentShape(Rectangle())
     }
-    .buttonStyle(.plain)
+    .buttonStyle(PressDimStyle())
+    .onHover { hovered = $0 }
     .padding(.leading, Metrics.indent)
     .frame(height: Metrics.rowHeight(row))
   }

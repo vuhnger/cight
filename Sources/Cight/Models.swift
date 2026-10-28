@@ -29,7 +29,7 @@ final class RunRowModel: Identifiable {
     state = run.state
     starter = Formatting.login(run.actor?.login ?? "")
     avatar = AvatarCache.url(run.actor?.avatarUrl)
-    url = run.link(host: host)
+    url = run.targetLink(host: host)
     startedAt = run.runStartedAt ?? run.createdAt
     activityAt = run.activityDate
     median = eta?.median
@@ -44,7 +44,7 @@ final class RunRowModel: Identifiable {
     set(\.state, run.state)
     set(\.starter, Formatting.login(run.actor?.login ?? ""))
     set(\.avatar, AvatarCache.url(run.actor?.avatarUrl))
-    set(\.url, run.link(host: host))
+    set(\.url, run.targetLink(host: host))
     set(\.startedAt, run.runStartedAt ?? run.createdAt)
     set(\.activityAt, run.activityDate)
     set(\.median, eta?.median)
