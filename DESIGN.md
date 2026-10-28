@@ -123,7 +123,7 @@ State glyph (13px), workflow name, PR number as `#123`, the starter's avatar (16
 A 64px glass card tinted orange, with a 20px glyph and up to two lines of callout text. The signed-out notice carries a prominent Retry button.
 
 ### Menu bar strip
-The status item is always visible. Each repository with a failed, running, overdue or queued run gets one 15px glyph, 5px apart. Passed repositories get no glyph. With nothing active, the item shows an 18px monochrome template ring, open by a quarter with round caps, matching the app icon. When signed out, the item is a single red lock.
+The status item is always visible. Each repository with a running, overdue or queued run gets one 15px glyph, 5px apart. Passed and failed repositories get no glyph, so failures show only in the panel. With nothing running or queued, the item shows an 18px monochrome template ring, open by a quarter with round caps, matching the app icon. When signed out, the item is a single red lock.
 
 ### State glyphs
 Passed is a filled check circle, failed a filled cross circle, queued a clock. Running is an amber ring with a pie that fills with estimated progress, or a center dot when there is no estimate. Overdue is a full orange pie.
@@ -147,4 +147,4 @@ A flat green open ring on a solid dark squircle. It has no glass, no shadow, no 
 - **Don't** add gradients, gloss or shadows, in the panel or the icon.
 - **Don't** support a light appearance.
 - **Don't** use em dashes or middle dot or bullet separators in UI text.
-- **Don't** show a menu bar glyph for a passed repository.
+- **Don't** show a menu bar glyph for a repository with no running or queued run.

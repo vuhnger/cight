@@ -67,14 +67,32 @@ struct MenuBarGlyphTests {
     #expect(MenuBarGlyphs.glyph(for: repo([]), now: at(10)) == nil)
   }
 
-  @Test func glyphsKeepPanelOrderAndDropPassedAndEmptyRepos() {
+  @Test func glyphsKeepPanelOrderAndDropFailedPassedAndEmptyRepos() {
     let repos = [
       repo([makeRun(id: 1, conclusion: "failure")]), repo([makeRun(id: 2)]), repo([]),
       repo([makeRun(id: 3, conclusion: "skipped")]),
       repo([makeRun(id: 4, status: "queued", conclusion: nil)]),
     ]
+    #expect(MenuBarGlyphs.glyphs(repos: repos, signedOut: false, now: at(10)) == [.queued])
+  }
+
+  @Test func failedAndPassedReposShowTheIdleIcon() {
+    let repos = [repo([makeRun(id: 1, conclusion: "failure")]), repo([makeRun(id: 2)])]
+    #expect(MenuBarGlyphs.glyphs(repos: repos, signedOut: false, now: at(10)) == [.idle])
+  }
+
+  @Test func aRepoWithAFailedAndARunningWorkflowShowsTheRunningGlyph() {
+    let runs = [makeRun(id: 1, workflow: 1, conclusion: "failure"), running(id: 2, workflow: 2)]
     #expect(
-      MenuBarGlyphs.glyphs(repos: repos, signedOut: false, now: at(10)) == [.failed, .queued])
+      MenuBarGlyphs.glyphs(repos: [repo(runs)], signedOut: false, now: at(10))
+        == [.running(progress: nil)])
+  }
+
+  @Test func aFailedRepoNextToARunningOneShowsOnlyTheRunningGlyph() {
+    let repos = [repo([makeRun(id: 1, conclusion: "failure")]), repo([running(id: 2)])]
+    #expect(
+      MenuBarGlyphs.glyphs(repos: repos, signedOut: false, now: at(10))
+        == [.running(progress: nil)])
   }
 
   @Test func allPassedShowsTheIdleIcon() {
