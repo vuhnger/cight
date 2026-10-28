@@ -8,9 +8,9 @@ BIN="$(swift build -c release --show-bin-path)/Peek"
 APP=build/Peek.app
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
-cp "$BIN" "$APP/Contents/MacOS/Peek"
+cp "$BIN" "$APP/Contents/MacOS/Cight"
 cp -R "$(find .build/artifacts -type d -path '*macos-arm64_x86_64/Sparkle.framework' | head -1)" "$APP/Contents/Frameworks/"
-install_name_tool -add_rpath @executable_path/../Frameworks "$APP/Contents/MacOS/Peek"
+install_name_tool -add_rpath @executable_path/../Frameworks "$APP/Contents/MacOS/Cight"
 xcrun actool Resources/AppIcon.icon --compile "$APP/Contents/Resources" \
     --output-format human-readable-text --notices --warnings --errors \
     --output-partial-info-plist build/icon-partial.plist \
@@ -21,7 +21,7 @@ cat > "$APP/Contents/Info.plist" <<EOF
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleExecutable</key><string>Peek</string>
+    <key>CFBundleExecutable</key><string>Cight</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundleIconName</key><string>AppIcon</string>
     <key>CFBundleIdentifier</key><string>com.vuhnger.cight</string>
