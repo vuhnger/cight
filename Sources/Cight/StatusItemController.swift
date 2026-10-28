@@ -7,7 +7,6 @@ final class StatusItemController: NSObject {
   private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
   private var shown: [MenuBarGlyph] = []
   var onClick: () -> Void = {}
-  var onPointer: () -> Void = {}
 
   var frame: NSRect? {
     item.button?.window?.frame
@@ -19,10 +18,6 @@ final class StatusItemController: NSObject {
     item.button?.target = self
     item.button?.action = #selector(clicked)
     item.button?.sendAction(on: [.leftMouseDown, .rightMouseDown])
-    item.button?.addTrackingArea(
-      NSTrackingArea(
-        rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
-        owner: self, userInfo: nil))
   }
 
   func update(_ glyphs: [MenuBarGlyph]) {
@@ -57,14 +52,6 @@ final class StatusItemController: NSObject {
     image.isTemplate = true
     return image
   }()
-
-  @objc func mouseEntered(with event: NSEvent) {
-    onPointer()
-  }
-
-  @objc func mouseExited(with event: NSEvent) {
-    onPointer()
-  }
 
   @objc private func clicked() {
     onClick()
