@@ -81,6 +81,13 @@ struct MenuBarGlyphTests {
     #expect(MenuBarGlyphs.glyphs(repos: repos, signedOut: false, now: at(10)) == [.idle])
   }
 
+  @Test func aRepoWithAFailedAndARunningWorkflowShowsTheRunningGlyph() {
+    let runs = [makeRun(id: 1, workflow: 1, conclusion: "failure"), running(id: 2, workflow: 2)]
+    #expect(
+      MenuBarGlyphs.glyphs(repos: [repo(runs)], signedOut: false, now: at(10))
+        == [.running(progress: nil)])
+  }
+
   @Test func aFailedRepoNextToARunningOneShowsOnlyTheRunningGlyph() {
     let repos = [repo([makeRun(id: 1, conclusion: "failure")]), repo([running(id: 2)])]
     #expect(
