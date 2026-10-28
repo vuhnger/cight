@@ -52,7 +52,13 @@ struct GitLabPipeline: Decodable, Sendable, Equatable {
 struct GitLabMergeRequest: Decodable, Sendable, Equatable {
   let iid: Int
   let sourceBranch: String?
+  let sourceProjectId: Int?
   let title: String?
+  let author: Author?
+
+  struct Author: Decodable, Sendable, Equatable {
+    let username: String
+  }
 }
 
 enum GitLabMapping {
@@ -91,7 +97,10 @@ enum GitLabMapping {
       status: mapped.status, conclusion: mapped.conclusion, event: pipeline.source,
       headBranch: branch, pullRequests: number.map { [PullRequestRef(number: $0)] },
       runStartedAt: pipeline.createdAt, updatedAt: pipeline.updatedAt, htmlUrl: pipeline.webUrl,
-      actor: actor, headRepository: RepoRef(id: project.id, fullName: project.fullName),
+      actor: actor,
+      headRepository: mergeRequest?.sourceProjectId.flatMap {
+        $0 == project.id ? nil : RepoRef(id: $0, fullName: nil)
+      } ?? RepoRef(id: project.id, fullName: project.fullName),
       isMergeRequest: number != nil)
   }
 }
@@ -160,10 +169,14 @@ public actor GitLabClient: RunProvider {
     let mineIds = Set(mine.map(\.id))
     let requests = await mergeRequests(
       repo: repo, numbers: Set(all.compactMap { GitLabMapping.mergeRequestNumber(ref: $0.ref) }))
-    return all.map {
-      GitLabMapping.run(
-        $0, project: repo, actor: mineIds.contains($0.id) ? Account(login: login) : nil,
-        mergeRequest: GitLabMapping.mergeRequestNumber(ref: $0.ref).flatMap { requests[$0] })
+    return all.map { pipeline in
+      let number = GitLabMapping.mergeRequestNumber(ref: pipeline.ref)
+      let request = number.flatMap { requests[$0] }
+      let isMine =
+        number == nil ? mineIds.contains(pipeline.id) : request?.author?.username == login
+      return GitLabMapping.run(
+        pipeline, project: repo, actor: isMine ? Account(login: login) : nil,
+        mergeRequest: request)
     }
   }
 
