@@ -24,6 +24,7 @@ func makeRun(
   headRepo: Int = 1,
   attempt: Int = 1,
   pull: Int? = nil,
+  sha: String? = nil,
   mergeRequest: Bool = false
 ) -> WorkflowRun {
   var json: [String: Any] = [
@@ -39,6 +40,7 @@ func makeRun(
   ]
   json["head_branch"] = branch
   if let pull { json["pull_requests"] = [["number": pull]] }
+  json["head_sha"] = sha
   if mergeRequest { json["is_merge_request"] = true }
   json["conclusion"] = conclusion
   json["run_started_at"] = started.map { at($0).ISO8601Format() }

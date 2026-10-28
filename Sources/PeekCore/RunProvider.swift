@@ -7,4 +7,11 @@ public protocol RunProvider: Sendable {
   func latestRun(repo: Repo, actor: String, since: Date) async throws -> WorkflowRun?
   func runs(repo: Repo) async throws -> [WorkflowRun]
   func branches(repo: Repo) async throws -> Set<String>?
+  func resolvingPullRequests(_ runs: [WorkflowRun], repo: Repo) async -> [WorkflowRun]
+}
+
+extension RunProvider {
+  public func resolvingPullRequests(_ runs: [WorkflowRun], repo: Repo) async -> [WorkflowRun] {
+    runs
+  }
 }

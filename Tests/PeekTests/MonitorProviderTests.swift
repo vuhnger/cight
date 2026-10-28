@@ -36,6 +36,52 @@ private struct FakeProvider: RunProvider {
   }
 }
 
+private final class RecordingProvider: RunProvider, @unchecked Sendable {
+  let host = Repo.githubHost
+  let repo: Repo
+  private let lock = NSLock()
+  private var passed: [[Int]] = []
+
+  init(repo: Repo) { self.repo = repo }
+
+  var lookedUp: [[Int]] { lock.withLock { passed } }
+
+  func viewer() async throws -> Viewer { Viewer(id: 1, login: "me") }
+  func repos() async throws -> [Repo] { [repo] }
+  func latestRun(repo: Repo, actor: String, since: Date) async throws -> WorkflowRun? {
+    try run(1, 1, "main", "push")
+  }
+  func branches(repo: Repo) async throws -> Set<String>? { ["main"] }
+
+  func runs(repo: Repo) async throws -> [WorkflowRun] {
+    [
+      try run(1, 1, "main", "pull_request"),
+      try run(2, 1, "gone", "pull_request"),
+      try run(3, 2, "main", "push"),
+    ]
+  }
+
+  private func run(_ id: Int, _ workflow: Int, _ branch: String, _ event: String) throws
+    -> WorkflowRun
+  {
+    let json = """
+      {"id":\(id),"workflow_id":\(workflow),"status":"completed","conclusion":"success",\
+      "event":"\(event)","created_at":"\(Date().ISO8601Format())","head_branch":"\(branch)",\
+      "actor":{"login":"me","id":1},"head_repository":{"id":1,"full_name":"foo/bar"}}
+      """
+    return try JSONDecoder.github.decode(WorkflowRun.self, from: Data(json.utf8))
+  }
+
+  func resolvingPullRequests(_ runs: [WorkflowRun], repo: Repo) async -> [WorkflowRun] {
+    lock.withLock { passed.append(runs.map(\.id).sorted()) }
+    return runs.map { run in
+      var run = run
+      if run.id == 1 { run.pullRequests = [PullRequestRef(number: 42)] }
+      return run
+    }
+  }
+}
+
 private func repo(host: String, id: Int = 1) -> Repo {
   Repo(
     id: id, name: "bar", fullName: "foo/bar", defaultBranch: "main", pushedAt: Date(), host: host)
@@ -43,6 +89,15 @@ private func repo(host: String, id: Int = 1) -> Repo {
 
 @MainActor
 struct MonitorProviderTests {
+  @Test func onlyDisplayedRunsAreResolvedAndTheNumberReachesTheRow() async {
+    let github = RecordingProvider(repo: repo(host: Repo.githubHost))
+    let monitor = Monitor(github: github, gitLab: { [] })
+    await monitor.pollOnce()
+    #expect(github.lookedUp == [[1, 3]])
+    let rows = monitor.repos.first?.branches.flatMap(\.rows) ?? []
+    #expect(rows.contains { $0.pullRequest == 42 })
+  }
+
   @Test func aFailingGitLabHostLeavesGitHubResultsIntact() async {
     for failure in [GitHubError.unauthorized, .transport(.timedOut), .server(500), .decoding] {
       let monitor = Monitor(

@@ -61,12 +61,11 @@ public actor GitHubClient: RunProvider {
   public func runs(owner: String, name: String) async throws -> [WorkflowRun] {
     let path = "repos/\(try segment(owner))/\(try segment(name))/actions/runs?per_page=100"
     let page: RunsPage = try await get(path)
-    return await resolvingPullRequests(page.runs, owner: owner, name: name)
+    return page.runs
   }
 
-  private func resolvingPullRequests(_ runs: [WorkflowRun], owner: String, name: String) async
-    -> [WorkflowRun]
-  {
+  public func resolvingPullRequests(_ runs: [WorkflowRun], repo: Repo) async -> [WorkflowRun] {
+    guard let (owner, name) = try? parts(repo) else { return runs }
     let repo = "\(owner)/\(name)"
     var known = pullNumbers[repo, default: [:]].filter { sha, _ in
       runs.contains { $0.headSha == sha }
