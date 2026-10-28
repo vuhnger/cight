@@ -109,6 +109,23 @@ struct RunTrackerTests {
     #expect(kinds(events) == [.passed])
   }
 
+  @Test(arguments: ["pull_request", "pull_request_target"])
+  func aPassOnAMergedPullRequestIsReportedByItsEvent(event: String) {
+    var tracker = RunTracker()
+    _ = tracker.ingest(repo: "o/a", runs: [passed(1)])
+    let events = tracker.ingest(
+      repo: "o/a", runs: [makeRun(id: 2, branch: "x", event: event, created: 2)])
+    #expect(kinds(events) == [.passed])
+  }
+
+  @Test func aPassOnAPushWithoutPullRequestsIsNotReported() {
+    var tracker = RunTracker()
+    _ = tracker.ingest(repo: "o/a", runs: [passed(1)])
+    let events = tracker.ingest(
+      repo: "o/a", runs: [makeRun(id: 2, branch: "x", event: "push", created: 2)])
+    #expect(events.isEmpty)
+  }
+
   @Test func aPassOnAPullRequestAfterAFailureIsOnlyRecovered() {
     var tracker = RunTracker()
     _ = tracker.ingest(
