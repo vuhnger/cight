@@ -31,11 +31,13 @@ final class ToastController {
   private let hosting: NSHostingView<ToastStackView>
   private var timers: [UUID: Task<Void, Never>] = [:]
   private var panelOpen = false
+  private var size = CGSize.zero
 
   init(anchor: @escaping () -> NSRect?) {
     self.anchor = anchor
     hosting = NSHostingView(
-      rootView: ToastStackView(model: model, hover: { _, _ in }, tap: { _ in }))
+      rootView: ToastStackView(
+        model: model, hover: { _, _ in }, tap: { _ in }, resized: { _ in }))
     hosting.sizingOptions = []
     panel = ToastPanel(
       contentRect: .zero, styleMask: [.nonactivatingPanel, .borderless], backing: .buffered,
@@ -52,7 +54,11 @@ final class ToastController {
     hosting.rootView = ToastStackView(
       model: model,
       hover: { [weak self] id, inside in self?.hover(id, inside: inside) },
-      tap: { [weak self] id in self?.tap(id) })
+      tap: { [weak self] id in self?.tap(id) },
+      resized: { [weak self] size in
+        self?.size = size
+        self?.layout()
+      })
     track({ [model] in model.items.map(\.id) }, apply: { [weak self] _ in self?.layout() })
   }
 
@@ -119,8 +125,7 @@ final class ToastController {
       panel.orderOut(nil)
       return
     }
-    hosting.layoutSubtreeIfNeeded()
-    let size = hosting.fittingSize
+    guard size.width > 0, size.height > 0 else { return }
     let screens = NSScreen.screens.map {
       PanelPlacement.Screen(frame: $0.frame, visibleFrame: $0.visibleFrame)
     }
@@ -146,6 +151,7 @@ struct ToastStackView: View {
   let model: ToastModel
   let hover: (UUID, Bool) -> Void
   let tap: (UUID) -> Void
+  let resized: (CGSize) -> Void
 
   var body: some View {
     GlassEffectContainer(spacing: 12) {
@@ -160,6 +166,7 @@ struct ToastStackView: View {
       }
     }
     .fixedSize()
+    .onGeometryChange(for: CGSize.self, of: \.size, action: resized)
     .preferredColorScheme(.dark)
   }
 }
