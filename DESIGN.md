@@ -114,7 +114,7 @@ Cards have 22px rounded corners. Branch pills and the progress bar (4px tall) ar
 ## Components
 
 ### Repository card
-A header button with the most urgent state glyph (16px), `owner/name`, the age of the newest run and a chevron. Cards sort newest first. A card is collapsed unless a run is running or queued, and clicking the header toggles it. Expanded, it lists each branch pill and its run rows. A missing repository shows one line of secondary text and cannot expand.
+A header button with the most urgent state glyph (16px), `owner/name`, the age of the newest run and a chevron. Cards sort newest first. A card is collapsed unless a run is running or queued, and clicking the header toggles it. Expanded, it lists each branch pill and its run rows, both newest first. A missing repository shows one line of secondary text and cannot expand.
 
 ### Run row
 State glyph (13px), workflow name, PR number as `#123`, the starter's avatar (16px), the run title and a trailing time. A running row shows elapsed time in amber and remaining time in secondary. Remaining time is prefixed with `~` when fewer than three past runs inform it. Clicking a row opens the run on GitHub and closes the panel.

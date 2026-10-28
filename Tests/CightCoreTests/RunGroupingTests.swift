@@ -65,7 +65,7 @@ struct RunGroupingTests {
     #expect(own.first?.branches.map(\.branch) == ["main"])
   }
 
-  @Test func ordersReposBranchesAndRunsByUrgencyThenRecency() {
+  @Test func ordersReposByUrgencyThenRecency() {
     let passedRepo = RepoRuns(
       id: 1, fullName: "o/passed", defaultBranch: "main",
       runs: [makeRun(id: 1, created: 500)])
@@ -87,9 +87,33 @@ struct RunGroupingTests {
     #expect(groups.map(\.fullName) == ["o/failed", "o/running", "o/passed"])
     #expect(groups.map(\.state) == [.failed, .running, .passed])
     let branches = groups[0].branches
-    #expect(branches.map(\.branch) == ["new-fail", "old-fail", "pass"])
-    #expect(branches.map(\.state) == [.failed, .failed, .passed])
-    #expect(branches[1].runs.map(\.id) == [3, 5])
+    #expect(branches.map(\.branch) == ["pass", "new-fail", "old-fail"])
+    #expect(branches.map(\.state) == [.passed, .failed, .failed])
+    #expect(branches[2].runs.map(\.id) == [3, 5])
+  }
+
+  @Test func aNewerPassedBranchComesBeforeAnOlderFailedBranch() {
+    let repo = RepoRuns(
+      id: 1, fullName: "o/r", defaultBranch: "main",
+      runs: [
+        makeRun(id: 1, branch: "old", conclusion: "failure", created: 100),
+        makeRun(id: 2, branch: "new", created: 200),
+      ])
+    let group = RunGrouping.groups([repo], viewer: "me")[0]
+    #expect(group.branches.map(\.branch) == ["new", "old"])
+    #expect(group.state == .failed)
+  }
+
+  @Test func aNewerPassedRunComesBeforeAnOlderFailedRunInOneBranch() {
+    let repo = RepoRuns(
+      id: 1, fullName: "o/r", defaultBranch: "main",
+      runs: [
+        makeRun(id: 1, workflow: 1, conclusion: "failure", created: 100),
+        makeRun(id: 2, workflow: 2, created: 200),
+      ])
+    let branch = RunGrouping.groups([repo], viewer: "me")[0].branches[0]
+    #expect(branch.runs.map(\.id) == [2, 1])
+    #expect(branch.state == .failed)
   }
 
   @Test func recencyBreaksTiesBetweenRepos() {
