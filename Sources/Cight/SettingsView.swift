@@ -5,11 +5,14 @@ struct SettingsView: View {
   var notifier: Notifier
   var updates: UpdateChecker
   var launchAtLogin: LaunchAtLogin
+  var recorder: ShortcutRecorder
 
   var body: some View {
-    GeneralPane(notifier: notifier, updates: updates, launchAtLogin: launchAtLogin)
-      .padding(20)
-      .frame(width: 520, alignment: .top)
+    GeneralPane(
+      notifier: notifier, updates: updates, launchAtLogin: launchAtLogin, recorder: recorder
+    )
+    .padding(20)
+    .frame(width: 520, alignment: .top)
   }
 }
 
@@ -17,6 +20,7 @@ private struct GeneralPane: View {
   @Bindable var notifier: Notifier
   var updates: UpdateChecker
   var launchAtLogin: LaunchAtLogin
+  var recorder: ShortcutRecorder
   @AppStorage(BuiltInRuns.key) private var showBuiltIn = false
 
   var body: some View {
@@ -39,7 +43,18 @@ private struct GeneralPane: View {
 
       Divider()
 
-      Text("Show or hide the panel with Ctrl+Opt+Cmd+G.").foregroundStyle(.secondary)
+      VStack(alignment: .leading, spacing: 6) {
+        HStack(spacing: 6) {
+          Text("Show or hide the panel with").foregroundStyle(.secondary)
+          Button(recorder.recording ? "Type a shortcut" : recorder.shortcut.display) {
+            recorder.start()
+          }
+          .controlSize(.small)
+        }
+        if let error = recorder.error {
+          Text(error).foregroundStyle(.orange).font(.callout)
+        }
+      }
 
       Button("Check for updates") { updates.check() }
         .disabled(!updates.canCheck)
