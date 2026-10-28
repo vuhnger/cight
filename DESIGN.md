@@ -132,7 +132,7 @@ A glass card like a panel card, 340px wide and sized to its content, with a 20px
 Passed is a filled check circle, failed a filled cross circle, queued a clock. Running is an amber ring with a pie that fills with estimated progress, or a center dot when there is no estimate. Overdue is a full orange pie.
 
 ### Panel behavior
-The panel opens after the pointer rests 140ms on the menu bar icon and closes 50ms after the pointer leaves both icon and panel. Ctrl+Opt+Cmd+G and a click on the icon toggle it. A right click or Ctrl-click on the icon opens a menu with Settings…, Check for updates…, Refresh now and Quit Cight, and closes the panel. Escape and a click outside close it.
+The panel opens after the pointer rests 140ms on the menu bar icon and closes 50ms after the pointer leaves both icon and panel. A click on the icon and the global shortcut toggle it. The shortcut is Ctrl+Opt+Cmd+G by default and can be changed in Settings. A right click or Ctrl-click on the icon opens a menu with Settings…, Check for updates…, Refresh now and Quit Cight, and closes the panel. Escape and a click outside close it.
 
 ### App icon
 A flat green open ring on a solid dark squircle. It has no glass, no shadow, no translucency and no specular highlight.

@@ -67,7 +67,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     self.notifier = notifier
 
     let updates = UpdateChecker(controller: updater)
-    let window = SettingsWindow(notifier: notifier, updates: updates)
+    let window = SettingsWindow(
+      notifier: notifier, updates: updates, shortcut: panel.shortcut,
+      suspendShortcut: { [weak panel] in panel?.suspendHotKey() },
+      resumeShortcut: { [weak panel] in panel?.resumeHotKey() },
+      applyShortcut: { [weak panel] in panel?.setShortcut($0) ?? false })
     settingsWindow = window
     status.onSettings = { [weak window] in window?.show() }
     status.onCheck = { [updates] in updates.check() }

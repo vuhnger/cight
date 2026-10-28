@@ -42,6 +42,7 @@ final class PanelController: NSObject {
   private var trigger: (name: String, start: CFTimeInterval)?
   private var interval: OSSignpostIntervalState?
   private var hotKey: EventHotKeyRef?
+  private(set) var shortcut = Shortcut.load(from: .standard)
   private var menuUp = false
 
   init(monitor: Monitor, anchor: @escaping () -> NSRect?) {
@@ -249,9 +250,38 @@ final class PanelController: NSObject {
         MainActor.assumeIsolated { PanelController.shared?.hotKeyPressed(at: start) }
         return noErr
       }, 1, &spec, nil, nil)
-    RegisterEventHotKey(
-      UInt32(kVK_ANSI_G), UInt32(cmdKey | optionKey | controlKey),
+    _ = registerShortcut(shortcut)
+  }
+
+  func suspendHotKey() {
+    if let hotKey { UnregisterEventHotKey(hotKey) }
+    hotKey = nil
+  }
+
+  func resumeHotKey() {
+    if hotKey == nil { _ = registerShortcut(shortcut) }
+  }
+
+  func setShortcut(_ new: Shortcut) -> Bool {
+    suspendHotKey()
+    guard registerShortcut(new) else {
+      _ = registerShortcut(shortcut)
+      return false
+    }
+    shortcut = new
+    new.save(to: .standard)
+    return true
+  }
+
+  private func registerShortcut(_ value: Shortcut) -> Bool {
+    var modifiers = 0
+    if value.modifiers.contains(.command) { modifiers |= cmdKey }
+    if value.modifiers.contains(.option) { modifiers |= optionKey }
+    if value.modifiers.contains(.control) { modifiers |= controlKey }
+    if value.modifiers.contains(.shift) { modifiers |= shiftKey }
+    return RegisterEventHotKey(
+      value.keyCode, UInt32(modifiers),
       EventHotKeyID(signature: OSType(0x4349_4748), id: 1), GetApplicationEventTarget(), 0,
-      &hotKey)
+      &hotKey) == noErr
   }
 }
