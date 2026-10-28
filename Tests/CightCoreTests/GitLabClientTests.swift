@@ -78,6 +78,58 @@ private let project = Repo(
   id: 101, name: "api", fullName: "acme/platform/api", defaultBranch: "main", pushedAt: t0,
   host: "gitlab.example.com")
 
+private func pipeline(_ id: Int, _ ref: String, _ source: String, minute: Int) -> String {
+  """
+  {"id":\(id),"project_id":101,"ref":"\(ref)","status":"success","source":"\(source)",\
+  "created_at":"2026-10-27T18:\(String(format: "%02d", minute)):00.000Z","name":"Pipeline"}
+  """
+}
+
+private func mergeRequest(_ iid: Int, branch: String, author: String, sourceProject: Int = 101)
+  -> String
+{
+  """
+  {"iid":\(iid),"title":"MR \(iid)","source_branch":"\(branch)","source_project_id":\(sourceProject),\
+  "author":{"id":1,"username":"\(author)"}}
+  """
+}
+
+private let busyProject = [
+  pipeline(9010, "main", "push", minute: 30),
+  pipeline(9009, "main", "merge_request_event", minute: 20),
+  pipeline(9020, "refs/merge-requests/21/head", "merge_request_event", minute: 31),
+  pipeline(9021, "refs/merge-requests/22/head", "merge_request_event", minute: 32),
+  pipeline(9022, "refs/merge-requests/23/merge", "merge_request_event", minute: 33),
+  pipeline(9023, "refs/merge-requests/24/head", "merge_request_event", minute: 34),
+  pipeline(9024, "refs/merge-requests/25/head", "merge_request_event", minute: 35),
+  pipeline(9025, "refs/merge-requests/26/head", "merge_request_event", minute: 36),
+].joined(separator: ",")
+
+private let busyMine = [
+  pipeline(9021, "refs/merge-requests/22/head", "merge_request_event", minute: 32),
+  pipeline(9022, "refs/merge-requests/23/merge", "merge_request_event", minute: 33),
+  pipeline(9024, "refs/merge-requests/25/head", "merge_request_event", minute: 35),
+].joined(separator: ",")
+
+private let busyMergeRequests = [
+  mergeRequest(21, branch: "feat-d", author: "dana"),
+  mergeRequest(22, branch: "feat-e", author: "erin"),
+  mergeRequest(23, branch: "feat-f", author: "frank"),
+  mergeRequest(24, branch: "main", author: "erin", sourceProject: 202),
+  mergeRequest(26, branch: "my-feature", author: "vuhnger"),
+].joined(separator: ",")
+
+private func busyRoute(_ request: URLRequest) -> StubReply {
+  let query = request.url?.query ?? ""
+  switch request.url?.path ?? "" {
+  case "/api/v4/projects/101/pipelines":
+    return StubReply(body: Data("[\(query.contains("username=") ? busyMine : busyProject)]".utf8))
+  case "/api/v4/projects/101/merge_requests":
+    return StubReply(body: Data("[\(busyMergeRequests)]".utf8))
+  default: return route(request)
+  }
+}
+
 @Suite(.serialized)
 struct GitLabClientTests {
   @Test(arguments: [
@@ -204,5 +256,19 @@ struct GitLabClientTests {
   @Test func aTransportFailureIsReportedNotThrownAsSomethingElse() async {
     let client = makeClient { _ in StubReply(error: URLError(.cannotConnectToHost)) }
     await #expect(throws: GitHubError.transport(.cannotConnectToHost)) { try await client.repos() }
+  }
+
+  @Test func theCardShowsMainAndTheViewersOwnMergeRequestsOnly() async throws {
+    let client = makeClient(handler: busyRoute)
+    let runs = try await client.runs(repo: project)
+    let group = try #require(
+      RunGrouping.groups(
+        [
+          RepoRuns(
+            id: project.id, fullName: project.fullName, defaultBranch: "main", runs: runs)
+        ], viewer: "vuhnger"
+      ).first)
+    #expect(group.branches.map(\.branch).sorted() == ["main", "my-feature"])
+    #expect(group.branches.first { $0.branch == "main" }?.runs.map(\.id) == [9010])
   }
 }
