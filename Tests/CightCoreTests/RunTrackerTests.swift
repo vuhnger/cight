@@ -93,6 +93,39 @@ struct RunTrackerTests {
     #expect(tracker.ingest(repo: "o/a", runs: [passed(2)]).isEmpty)
   }
 
+  @Test func aPassOnAPullRequestIsReported() {
+    var tracker = RunTracker()
+    _ = tracker.ingest(repo: "o/a", runs: [passed(1)])
+    let events = tracker.ingest(
+      repo: "o/a", runs: [makeRun(id: 2, branch: "x", created: 2, pull: 42)])
+    #expect(kinds(events) == [.passed])
+  }
+
+  @Test func aPassOnAMergeRequestIsReported() {
+    var tracker = RunTracker()
+    _ = tracker.ingest(repo: "o/a", runs: [passed(1)])
+    let events = tracker.ingest(
+      repo: "o/a", runs: [makeRun(id: 2, branch: "x", created: 2, mergeRequest: true)])
+    #expect(kinds(events) == [.passed])
+  }
+
+  @Test func aPassOnAPullRequestAfterAFailureIsOnlyRecovered() {
+    var tracker = RunTracker()
+    _ = tracker.ingest(
+      repo: "o/a", runs: [makeRun(id: 1, branch: "x", conclusion: "failure", created: 1, pull: 42)])
+    let events = tracker.ingest(
+      repo: "o/a", runs: [makeRun(id: 2, branch: "x", created: 2, pull: 42)])
+    #expect(kinds(events) == [.recovered])
+  }
+
+  @Test func aPassOnAPullRequestIsReportedOnce() {
+    var tracker = RunTracker()
+    _ = tracker.ingest(repo: "o/a", runs: [passed(1)])
+    let run = makeRun(id: 2, branch: "x", created: 2, pull: 42)
+    #expect(kinds(tracker.ingest(repo: "o/a", runs: [run])) == [.passed])
+    #expect(tracker.ingest(repo: "o/a", runs: [run]).isEmpty)
+  }
+
   @Test func aFailureOnOneBranchDoesNotMakeAPassOnAnotherBranchARecovery() {
     var tracker = RunTracker()
     _ = tracker.ingest(

@@ -29,6 +29,34 @@ struct NotificationTests {
     #expect(!settings.started)
   }
 
+  @Test func passedDefaultsToOn() {
+    #expect(NotificationSettings().passed)
+  }
+
+  @Test func settingsStoredWithoutThePassedKeyReadAsOn() throws {
+    let defaults = UserDefaults(suiteName: UUID().uuidString)!
+    let stored = #"{"failed":false,"fixed":true,"started":true}"#
+    defaults.set(Data(stored.utf8), forKey: NotificationSettings.key)
+    let loaded = NotificationSettings.load(from: defaults)
+    #expect(loaded == NotificationSettings(failed: false, fixed: true, started: true, passed: true))
+  }
+
+  @Test func thePassedToggleControlsOnlyThePassedKind() {
+    let only = NotificationSettings(failed: false, fixed: false, started: false, passed: true)
+    #expect(ToastContent.make(for: event(.passed), settings: only) != nil)
+    #expect(ToastContent.make(for: event(.failed), settings: only) == nil)
+    let off = NotificationSettings(failed: true, fixed: true, started: true, passed: false)
+    #expect(ToastContent.make(for: event(.passed), settings: off) == nil)
+  }
+
+  @Test func aPassedToastReadsPassedOnTheBranchWithItsPullRequestNumber() throws {
+    let toast = try #require(
+      ToastContent.make(for: event(.passed, pull: 42), settings: NotificationSettings()))
+    #expect(toast.glyph == .passed)
+    #expect(toast.line2 == "Pull request passed on fix")
+    #expect(toast.pullRequest == 42)
+  }
+
   @Test func eachToggleControlsOnlyItsOwnEventKind() {
     let all = NotificationSettings(failed: true, fixed: true, started: true)
     let none = NotificationSettings(failed: false, fixed: false, started: false)

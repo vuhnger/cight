@@ -151,6 +151,10 @@ public struct WorkflowRun: Decodable, Sendable, Equatable, Identifiable {
     pullRequests?.first?.number
   }
 
+  public var isPullOrMergeRequest: Bool {
+    pullRequestNumber != nil || isMergeRequest == true
+  }
+
   public var activityDate: Date {
     updatedAt ?? createdAt
   }

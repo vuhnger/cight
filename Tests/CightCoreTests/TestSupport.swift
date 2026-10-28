@@ -22,7 +22,9 @@ func makeRun(
   actor: String = "me",
   triggering: String? = nil,
   headRepo: Int = 1,
-  attempt: Int = 1
+  attempt: Int = 1,
+  pull: Int? = nil,
+  mergeRequest: Bool = false
 ) -> WorkflowRun {
   var json: [String: Any] = [
     "id": id,
@@ -36,6 +38,8 @@ func makeRun(
     "head_repository": ["id": headRepo, "full_name": "owner\(headRepo)/repo"],
   ]
   json["head_branch"] = branch
+  if let pull { json["pull_requests"] = [["number": pull]] }
+  if mergeRequest { json["is_merge_request"] = true }
   json["conclusion"] = conclusion
   json["run_started_at"] = started.map { at($0).ISO8601Format() }
   json["updated_at"] = updated.map { at($0).ISO8601Format() }
