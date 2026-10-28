@@ -21,6 +21,8 @@ enum Metrics {
   static let headerGlyph: CGFloat = 16
   static let rowGlyph: CGFloat = 13
   static let menuBarGlyph: CGFloat = 15
+  static let settingsInnerSpacing: CGFloat = 6
+  static let glyphGap: CGFloat = 10
 
   @MainActor
   static func height(of repo: RepoModel) -> CGFloat {
@@ -177,7 +179,7 @@ struct RepoCard: View {
     Button {
       repo.toggle()
     } label: {
-      HStack(spacing: 10) {
+      HStack(spacing: Metrics.glyphGap) {
         StateGlyph(
           kind: repo.problem != nil ? .warning : GlyphKind(repo.glyph), size: Metrics.headerGlyph)
         HStack(spacing: 0) {

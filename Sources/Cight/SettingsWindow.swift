@@ -8,15 +8,17 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
   private let updates: UpdateChecker
   private let launchAtLogin = LaunchAtLogin()
   private let recorder: ShortcutRecorder
+  private let monitor: Monitor
   private var window: NSWindow?
 
   init(
-    notifier: Notifier, updates: UpdateChecker, shortcut: Shortcut,
+    notifier: Notifier, updates: UpdateChecker, monitor: Monitor, shortcut: Shortcut,
     suspendShortcut: @escaping () -> Void, resumeShortcut: @escaping () -> Void,
     applyShortcut: @escaping (Shortcut) -> Bool
   ) {
     self.updates = updates
     self.notifier = notifier
+    self.monitor = monitor
     recorder = ShortcutRecorder(
       shortcut: shortcut, suspend: suspendShortcut, resume: resumeShortcut, apply: applyShortcut)
     super.init()
@@ -51,7 +53,8 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
     window.delegate = self
     let controller = NSHostingController(
       rootView: SettingsView(
-        notifier: notifier, updates: updates, launchAtLogin: launchAtLogin, recorder: recorder))
+        notifier: notifier, updates: updates, launchAtLogin: launchAtLogin, recorder: recorder,
+        monitor: monitor))
     controller.sizingOptions = .preferredContentSize
     window.contentViewController = controller
     window.center()
