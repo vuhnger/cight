@@ -34,6 +34,26 @@ private func ok(_ fixture: String, headers: [String: String] = [:]) -> StubReply
   StubReply(status: 200, headers: headers, body: Fixture.data(fixture))
 }
 
+private func runsBody(_ runs: [(id: Int, event: String, sha: String)]) -> Data {
+  let items = runs.map { run in
+    [
+      "id": run.id, "workflow_id": 1, "event": run.event, "head_sha": run.sha,
+      "created_at": at(0).ISO8601Format(), "pull_requests": [],
+    ] as [String: Any]
+  }
+  return try! JSONSerialization.data(withJSONObject: [
+    "total_count": items.count, "workflow_runs": items,
+  ])
+}
+
+private func isLookup(_ request: URLRequest) -> Bool {
+  request.url?.path.contains("/commits/") == true
+}
+
+private func lookups() -> [URLRequest] {
+  StubProtocol.requests.filter(isLookup)
+}
+
 @Suite(.serialized)
 struct GitHubClientTests {
   @Test func eachRequestHasAFifteenSecondTimeoutAndIgnoresLocalCaches() async throws {
@@ -44,12 +64,74 @@ struct GitHubClientTests {
     #expect(request.cachePolicy == .reloadIgnoringLocalCacheData)
   }
 
+  @Test func aMergedPullRequestRunGetsItsNumberFromTheCommitLookup() async throws {
+    let (client, _) = makeClient { request in
+      isLookup(request)
+        ? StubReply(status: 200, body: Data(#"[{"number": 42}]"#.utf8))
+        : StubReply(status: 200, body: runsBody([(1, "pull_request", "abc")]))
+    }
+    let runs = try await client.runs(owner: "o", name: "r")
+    #expect(runs.first?.pullRequestNumber == 42)
+    #expect(lookups().first?.url?.path == "/repos/o/r/commits/abc/pulls")
+  }
+
+  @Test func aFailedLookupKeepsTheRunsAndRetriesOnTheNextFetch() async throws {
+    let (client, _) = makeClient { request in
+      if isLookup(request) {
+        return lookups().count == 1
+          ? StubReply(status: 500) : StubReply(status: 200, body: Data(#"[{"number": 9}]"#.utf8))
+      }
+      return StubReply(status: 200, body: runsBody([(1, "pull_request", "abc")]))
+    }
+    let first = try await client.runs(owner: "o", name: "r")
+    #expect(first.count == 1)
+    #expect(first[0].pullRequestNumber == nil)
+    let second = try await client.runs(owner: "o", name: "r")
+    #expect(second[0].pullRequestNumber == 9)
+    #expect(lookups().count == 2)
+  }
+
+  @Test func aCachedShaMakesNoSecondLookupAndAnEmptyAnswerIsCachedToo() async throws {
+    let (client, _) = makeClient { request in
+      isLookup(request)
+        ? StubReply(status: 200, body: Data("[]".utf8))
+        : StubReply(status: 200, body: runsBody([(1, "pull_request", "abc")]))
+    }
+    for _ in 1...3 { _ = try await client.runs(owner: "o", name: "r") }
+    #expect(lookups().count == 1)
+  }
+
+  @Test func shasMissingFromTheLatestFetchAreForgotten() async throws {
+    let shas = Mutex(["abc"])
+    let (client, _) = makeClient { request in
+      isLookup(request)
+        ? StubReply(status: 200, body: Data(#"[{"number": 1}]"#.utf8))
+        : StubReply(
+          status: 200, body: runsBody(shas.withLock { $0 }.map { (1, "pull_request", $0) }))
+    }
+    _ = try await client.runs(owner: "o", name: "r")
+    shas.withLock { $0 = ["def"] }
+    _ = try await client.runs(owner: "o", name: "r")
+    shas.withLock { $0 = ["abc"] }
+    _ = try await client.runs(owner: "o", name: "r")
+    #expect(lookups().count == 3)
+  }
+
+  @Test func pushRunsMakeNoLookup() async throws {
+    let (client, _) = makeClient { _ in
+      StubReply(status: 200, body: runsBody([(1, "push", "abc")]))
+    }
+    let runs = try await client.runs(owner: "o", name: "r")
+    #expect(runs[0].pullRequestNumber == nil)
+    #expect(lookups().isEmpty)
+  }
+
   @Test func a200WithoutAnETagEvictsTheOldEntry() async throws {
     let (client, _) = makeClient { request in
       switch StubProtocol.requests.count {
-      case 1: ok("runs", headers: ["ETag": "\"abc\""])
-      case 2: ok("runs")
-      default: ok("runs")
+      case 1: ok("runs-linked", headers: ["ETag": "\"abc\""])
+      case 2: ok("runs-linked")
+      default: ok("runs-linked")
       }
     }
     for _ in 1...3 { _ = try await client.runs(owner: "o", name: "r") }
@@ -60,9 +142,9 @@ struct GitHubClientTests {
   @Test func a404EvictsTheOldEntry() async throws {
     let (client, _) = makeClient { _ in
       switch StubProtocol.requests.count {
-      case 1: ok("runs", headers: ["ETag": "\"abc\""])
+      case 1: ok("runs-linked", headers: ["ETag": "\"abc\""])
       case 2: StubReply(status: 404)
-      default: ok("runs")
+      default: ok("runs-linked")
       }
     }
     _ = try await client.runs(owner: "o", name: "r")
@@ -75,9 +157,9 @@ struct GitHubClientTests {
     let (client, _) = makeClient(tokens: ["old", "new"]) { request in
       let bearer = request.value(forHTTPHeaderField: "Authorization")
       switch StubProtocol.requests.count {
-      case 1: return ok("runs", headers: ["ETag": "\"abc\""])
+      case 1: return ok("runs-linked", headers: ["ETag": "\"abc\""])
       case 2: return StubReply(status: 401)
-      default: return bearer == "Bearer new" ? ok("runs") : StubReply(status: 401)
+      default: return bearer == "Bearer new" ? ok("runs-linked") : StubReply(status: 401)
       }
     }
     _ = try await client.runs(owner: "o", name: "r")
@@ -89,13 +171,13 @@ struct GitHubClientTests {
     ("a b", "r"), ("o", "r?x=1"), ("o", "r/../x"), ("..", "r"), ("o", "."), ("", "r"),
   ])
   func rejectsOwnersAndNamesThatCannotBePathSegments(owner: String, name: String) async {
-    let (client, _) = makeClient { _ in ok("runs") }
+    let (client, _) = makeClient { _ in ok("runs-linked") }
     await #expect(throws: GitHubError.notFound) { try await client.runs(owner: owner, name: name) }
     #expect(StubProtocol.requests.isEmpty)
   }
 
   @Test func acceptsDotsDashesAndUnderscoresInNames() async throws {
-    let (client, _) = makeClient { _ in ok("runs") }
+    let (client, _) = makeClient { _ in ok("runs-linked") }
     _ = try await client.runs(owner: "Some-Org_1", name: "swift.format-2")
     #expect(
       StubProtocol.requests.first?.url?.path == "/repos/Some-Org_1/swift.format-2/actions/runs")
@@ -167,7 +249,7 @@ struct GitHubClientTests {
       switch request.url?.path {
       case "/user": ok("user")
       case "/user/repos": ok("repos")
-      default: ok("runs")
+      default: ok("runs-linked")
       }
     }
     #expect(try await client.viewer().login == "octocat")
@@ -189,7 +271,7 @@ struct GitHubClientTests {
         return StubReply(status: 304)
       }
       if StubProtocol.requests.count > 1 { return StubReply(status: 500) }
-      return ok("runs", headers: ["ETag": "\"abc\""])
+      return ok("runs-linked", headers: ["ETag": "\"abc\""])
     }
     let first = try await client.runs(owner: "o", name: "r")
     let second = try await client.runs(owner: "o", name: "r")
@@ -201,7 +283,7 @@ struct GitHubClientTests {
   @Test func etagsAreKeptPerURL() async throws {
     let (client, _) = makeClient { request in
       request.url?.path == "/user"
-        ? ok("user", headers: ["ETag": "\"u\""]) : ok("runs", headers: ["ETag": "\"r\""])
+        ? ok("user", headers: ["ETag": "\"u\""]) : ok("runs-linked", headers: ["ETag": "\"r\""])
     }
     _ = try await client.viewer()
     _ = try await client.runs(owner: "o", name: "r")
@@ -303,7 +385,7 @@ struct GitHubClientTests {
     let target = "https://api.github.com/repositories/42/actions/runs?per_page=100"
     let (client, _) = makeClient { request in
       request.url?.path.hasPrefix("/repos/old/") == true
-        ? StubReply(status: 301, headers: ["Location": target]) : ok("runs")
+        ? StubReply(status: 301, headers: ["Location": target]) : ok("runs-linked")
     }
     let runs = try await client.runs(owner: "old", name: "name")
     #expect(runs.count == 10)

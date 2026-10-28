@@ -21,6 +21,7 @@ public actor GitHubClient: RunProvider {
   private let now: @Sendable () -> Date
   private var token: String?
   private var cache: [URL: (etag: String, body: Data)] = [:]
+  private var pullNumbers: [String: [String: [Int]]] = [:]
 
   public init(
     configuration: URLSessionConfiguration = .ephemeral,
@@ -60,7 +61,37 @@ public actor GitHubClient: RunProvider {
   public func runs(owner: String, name: String) async throws -> [WorkflowRun] {
     let path = "repos/\(try segment(owner))/\(try segment(name))/actions/runs?per_page=100"
     let page: RunsPage = try await get(path)
-    return page.runs
+    return await resolvingPullRequests(page.runs, owner: owner, name: name)
+  }
+
+  private func resolvingPullRequests(_ runs: [WorkflowRun], owner: String, name: String) async
+    -> [WorkflowRun]
+  {
+    let repo = "\(owner)/\(name)"
+    var known = pullNumbers[repo, default: [:]].filter { sha, _ in
+      runs.contains { $0.headSha == sha }
+    }
+    var result = runs
+    var failed: Set<String> = []
+    for index in result.indices {
+      let run = result[index]
+      guard run.event == "pull_request" || run.event == "pull_request_target",
+        run.pullRequestNumber == nil, let sha = run.headSha, !failed.contains(sha)
+      else { continue }
+      if known[sha] == nil {
+        do {
+          let pulls: [PullRequestRef] = try await get(
+            "repos/\(try segment(owner))/\(try segment(name))/commits/\(try segment(sha))/pulls")
+          known[sha] = pulls.prefix(1).map(\.number)
+        } catch {
+          failed.insert(sha)
+          continue
+        }
+      }
+      result[index].pullRequests = known[sha]?.map(PullRequestRef.init)
+    }
+    pullNumbers[repo] = known
+    return result
   }
 
   public func branches(owner: String, name: String) async throws -> Set<String>? {

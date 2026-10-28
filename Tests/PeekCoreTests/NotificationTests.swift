@@ -93,6 +93,12 @@ struct NotificationTests {
     #expect(pull.pullRequest == 123)
   }
 
+  @Test func theToastAddressPointsAtThePullRequest() throws {
+    let all = NotificationSettings(failed: true, fixed: true, started: true)
+    let pull = try #require(ToastContent.make(for: event(.failed, pull: 123), settings: all))
+    #expect(pull.url == URL(string: "https://github.com/o/r/pull/123"))
+  }
+
   @Test func fallsBackWhenFieldsAreMissingAndNeverNamesTheActor() throws {
     let all = NotificationSettings(failed: true, fixed: true, started: true)
     let sparse = try #require(
