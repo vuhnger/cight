@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   private var panel: PanelController?
   private var settingsWindow: SettingsWindow?
   private var notifier: Notifier?
+  private var toasts: ToastController?
 
   private func others() -> [NSRunningApplication] {
     guard let id = Bundle.main.bundleIdentifier else { return [] }
@@ -55,9 +56,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     self.status = status
     self.panel = panel
 
-    let notifier = Notifier(defaults: .standard, center: SystemNotificationCenter.make())
-    monitor.onEvents = { events in Task { await notifier.deliver(events) } }
-    monitor.onSession = { state in Task { await notifier.observe(state) } }
+    let toasts = ToastController(anchor: { [weak status] in status?.frame })
+    panel.onVisibilityChange = { [weak toasts] in toasts?.panelVisibilityChanged($0) }
+    let notifier = Notifier(defaults: .standard, show: { toasts.show($0) })
+    monitor.onEvents = { notifier.deliver($0) }
+    monitor.onSession = { notifier.observe($0) }
+    self.toasts = toasts
     self.notifier = notifier
 
     let window = SettingsWindow(notifier: notifier, updates: UpdateChecker(controller: updater))

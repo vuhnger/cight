@@ -3,6 +3,7 @@ import SwiftUI
 
 enum Metrics {
   static let panelWidth: CGFloat = 420
+  static let toastWidth: CGFloat = 340
   static let outerPadding: CGFloat = 10
   static let cardSpacing: CGFloat = 10
   static let cardRadius: CGFloat = 22

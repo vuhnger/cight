@@ -31,33 +31,43 @@ public struct NotificationSettings: Codable, Sendable, Equatable {
   }
 }
 
-public struct NotificationContent: Sendable, Equatable {
-  public let identifier: String
-  public let title: String
-  public let body: String
+public enum ToastGlyph: Sendable, Equatable {
+  case passed
+  case failed
+  case running
+  case signedOut
+}
+
+public enum ToastStack {
+  public static let limit = 3
+
+  public static func pushing<T>(_ toast: T, onto stack: [T]) -> [T] {
+    Array(([toast] + stack).prefix(limit))
+  }
+}
+
+public struct ToastContent: Sendable, Equatable {
+  public let glyph: ToastGlyph
+  public let line1: String
+  public let line2: String
+  public let pullRequest: Int?
   public let url: URL?
 
-  public static let signedOut = NotificationContent(
-    identifier: "signed-out", title: "Signed out of GitHub",
-    body: "Run gh auth login in Terminal to resume monitoring.", url: nil)
+  public static let signedOut = ToastContent(
+    glyph: .signedOut, line1: "Signed out of GitHub",
+    line2: "Run gh auth login in Terminal to resume monitoring.", pullRequest: nil, url: nil)
 
-  public static func make(for event: RunEvent, settings: NotificationSettings)
-    -> NotificationContent?
-  {
+  public static func make(for event: RunEvent, settings: NotificationSettings) -> ToastContent? {
     guard settings.allows(event.kind) else { return nil }
     let run = event.run
-    let headline =
+    let (glyph, verb) =
       switch event.kind {
-      case .failed: "Failed"
-      case .recovered: "Fixed"
-      case .started: "Started"
+      case .failed: (ToastGlyph.failed, "failed")
+      case .recovered: (.passed, "fixed")
+      case .started: (.running, "started")
       }
-    var body = "\(run.name ?? "Workflow") on \(run.branch)"
-    if let actor = run.actor?.login {
-      body += " by \(Formatting.login(actor))"
-    }
-    return NotificationContent(
-      identifier: "run-\(run.id)-\(run.runAttempt ?? 1)-\(headline.lowercased())",
-      title: "\(headline) in \(event.repo)", body: body, url: run.htmlUrl.flatMap(URL.init))
+    return ToastContent(
+      glyph: glyph, line1: event.repo, line2: "\(run.name ?? "Workflow") \(verb) on \(run.branch)",
+      pullRequest: run.pullRequestNumber, url: run.htmlUrl.flatMap(URL.init))
   }
 }

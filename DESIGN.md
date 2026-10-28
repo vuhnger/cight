@@ -125,6 +125,9 @@ A 64px glass card tinted orange, with a 20px glyph and up to two lines of callou
 ### Menu bar strip
 The status item is always visible. Each repository with a running, overdue or queued run gets one 15px glyph, 5px apart. Passed and failed repositories get no glyph, so failures show only in the panel. With nothing running or queued, the item shows an 18px monochrome template ring, open by a quarter with round caps, matching the app icon. When signed out, the item is a single red lock.
 
+### Toast
+A glass card like a panel card, 340px wide and sized to its content, with a 20px state glyph, `owner/name` in the header style and one secondary line such as `CI failed on main`, with the PR number trailing as `#123`. Toasts appear 1pt below the menu bar, placed like the panel, newest on top, 8px apart, at most three. Each fades after 6 seconds unless the pointer rests on it. Clicking one opens the run on GitHub. No toast shows while the panel is open.
+
 ### State glyphs
 Passed is a filled check circle, failed a filled cross circle, queued a clock. Running is an amber ring with a pie that fills with estimated progress, or a center dot when there is no estimate. Overdue is a full orange pie.
 
