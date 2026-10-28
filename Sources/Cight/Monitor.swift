@@ -32,7 +32,7 @@ final class Monitor {
   @ObservationIgnored private var discovered: [Repo] = []
   @ObservationIgnored private var lastDiscovery = Date.distantPast
   @ObservationIgnored private var discoveryForced = true
-  @ObservationIgnored let client: GitHubClient
+  @ObservationIgnored let client: any RunProvider
   @ObservationIgnored private var viewer: String?
   @ObservationIgnored private var metas: [String: RepoMeta] = [:]
   @ObservationIgnored private var ghInstalled = true
@@ -63,7 +63,7 @@ final class Monitor {
   }
 
   init(
-    client: GitHubClient = GitHubClient(tokenProvider: { await GhTokenReader.read() })
+    client: any RunProvider = GitHubClient(tokenProvider: { await GhTokenReader.read() })
   ) {
     self.client = client
   }
@@ -212,7 +212,7 @@ final class Monitor {
   private nonisolated static let discoveryInterval: TimeInterval = 300
 
   private nonisolated static func fetch(
-    client: GitHubClient, repo: Repo, viewer: String, cached: RepoMeta?, now: Date,
+    client: any RunProvider, repo: Repo, viewer: String, cached: RepoMeta?, now: Date,
     showBuiltIn: Bool
   ) async -> Outcome {
     do {
