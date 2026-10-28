@@ -7,6 +7,11 @@ final class StatusItemController: NSObject {
   private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
   private var shown: [MenuBarGlyph] = []
   var onClick: () -> Void = {}
+  var onMenu: (Bool) -> Void = { _ in }
+  var onSettings: () -> Void = {}
+  var onCheck: () -> Void = {}
+  var onRefresh: () -> Void = {}
+  var canCheck: () -> Bool = { false }
 
   var frame: NSRect? {
     item.button?.window?.frame
@@ -54,6 +59,37 @@ final class StatusItemController: NSObject {
   }()
 
   @objc private func clicked() {
-    onClick()
+    guard let event = NSApp.currentEvent else { return onClick() }
+    if event.type == .rightMouseDown || event.modifierFlags.contains(.control) {
+      showMenu()
+    } else {
+      onClick()
+    }
   }
+
+  private func showMenu() {
+    let menu = NSMenu()
+    menu.autoenablesItems = false
+    let settings = NSMenuItem(
+      title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
+    let check = NSMenuItem(
+      title: "Check for updates…", action: #selector(checkForUpdates), keyEquivalent: "")
+    let refresh = NSMenuItem(title: "Refresh now", action: #selector(refreshNow), keyEquivalent: "")
+    for entry in [settings, check, refresh] { entry.target = self }
+    check.isEnabled = canCheck()
+    menu.items = [
+      settings, check, refresh, .separator(),
+      NSMenuItem(
+        title: "Quit Cight", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"),
+    ]
+    onMenu(true)
+    item.menu = menu
+    item.button?.performClick(nil)
+    item.menu = nil
+    onMenu(false)
+  }
+
+  @objc private func openSettings() { onSettings() }
+  @objc private func checkForUpdates() { onCheck() }
+  @objc private func refreshNow() { onRefresh() }
 }

@@ -51,6 +51,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let status = StatusItemController()
     let panel = PanelController(monitor: monitor, anchor: { [weak status] in status?.frame })
     status.onClick = { [weak panel] in panel?.iconClicked() }
+    status.onMenu = { [weak panel] in panel?.menuChanged(open: $0) }
+    status.onRefresh = { [monitor] in monitor.retry() }
     track({ [monitor] in monitor.glyphs }, apply: { [weak status] in status?.update($0) })
     self.status = status
     self.panel = panel
@@ -60,8 +62,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     monitor.onSession = { state in Task { await notifier.observe(state) } }
     self.notifier = notifier
 
-    let window = SettingsWindow(notifier: notifier, updates: UpdateChecker(controller: updater))
+    let updates = UpdateChecker(controller: updater)
+    let window = SettingsWindow(notifier: notifier, updates: updates)
     settingsWindow = window
+    status.onSettings = { [weak window] in window?.show() }
+    status.onCheck = { [updates] in updates.check() }
+    status.canCheck = { [updates] in updates.canCheck }
     monitor.start()
 
     if !LaunchAgent.byLaunchd { window.show() }

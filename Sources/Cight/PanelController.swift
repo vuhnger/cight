@@ -41,6 +41,7 @@ final class PanelController: NSObject {
   private var trigger: (name: String, start: CFTimeInterval)?
   private var interval: OSSignpostIntervalState?
   private var hotKey: EventHotKeyRef?
+  private var menuUp = false
 
   init(monitor: Monitor, anchor: @escaping () -> NSRect?) {
     self.monitor = monitor
@@ -67,6 +68,11 @@ final class PanelController: NSObject {
     warmUp()
     watchPointer()
     registerHotKey()
+  }
+
+  func menuChanged(open: Bool) {
+    menuUp = open
+    if open { send(.dismiss) }
   }
 
   func iconClicked() {
@@ -218,6 +224,7 @@ final class PanelController: NSObject {
   }
 
   private func samplePointer() {
+    guard !menuUp else { return }
     let location = NSEvent.mouseLocation
     let overIcon = anchor().map { Self.contains($0, location) } ?? false
     let overPanel = panel.isVisible && Self.contains(panel.frame, location)
