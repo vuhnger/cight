@@ -148,4 +148,35 @@ struct ProviderIdentityTests {
     #expect(NoticePolicy.combined(github: .signedOut, gitLabSignedOut: true) == .signedOut)
     #expect(NoticePolicy.combined(github: nil, gitLabSignedOut: false) == nil)
   }
+
+  @Test(arguments: [
+    "file:///Applications/Calculator.app", "http://gitlab.com/g/p/-/pipelines/1",
+    "myapp://run/1", "https://evil.example.com/g/p/-/pipelines/1",
+    "https://gitlab.com.evil.example.com/x", "not a url",
+  ])
+  func aRunLinkThatIsNotHTTPSOnTheProviderHostIsDropped(link: String) {
+    let pipeline = GitLabPipeline(
+      id: 1, projectId: 2, ref: "main", status: "failed", source: "push", createdAt: t0,
+      updatedAt: t0, webUrl: link, name: nil)
+    let run = GitLabMapping.run(
+      pipeline, project: repo("g/p", host: "gitlab.com"), actor: nil, mergeRequest: nil)
+    #expect(run.link(host: "gitlab.com") == nil)
+    let toast = ToastContent.make(
+      for: RunEvent(kind: .failed, repo: "gitlab.com/g/p", run: run, host: "gitlab.com"),
+      settings: .init())
+    #expect(toast?.url == nil)
+  }
+
+  @Test func aRunLinkOnTheProviderHostSurvivesIncludingAPort() {
+    let pipeline = GitLabPipeline(
+      id: 1, projectId: 2, ref: "main", status: "failed", source: "push", createdAt: t0,
+      updatedAt: t0, webUrl: "https://gitlab.example.com:8443/g/p/-/pipelines/1", name: nil)
+    let run = GitLabMapping.run(
+      pipeline, project: repo("g/p", host: "gitlab.example.com:8443"), actor: nil,
+      mergeRequest: nil)
+    let toast = ToastContent.make(
+      for: RunEvent(kind: .failed, repo: "x", run: run, host: "gitlab.example.com:8443"),
+      settings: .init())
+    #expect(toast?.url?.absoluteString == "https://gitlab.example.com:8443/g/p/-/pipelines/1")
+  }
 }

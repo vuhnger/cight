@@ -29,7 +29,7 @@ final class RunRowModel: Identifiable {
     state = run.state
     starter = Formatting.login(run.actor?.login ?? "")
     avatar = AvatarCache.url(run.actor?.avatarUrl)
-    url = Self.webURL(run.htmlUrl, host: host)
+    url = run.link(host: host)
     startedAt = run.runStartedAt ?? run.createdAt
     activityAt = run.activityDate
     median = eta?.median
@@ -44,7 +44,7 @@ final class RunRowModel: Identifiable {
     set(\.state, run.state)
     set(\.starter, Formatting.login(run.actor?.login ?? ""))
     set(\.avatar, AvatarCache.url(run.actor?.avatarUrl))
-    set(\.url, Self.webURL(run.htmlUrl, host: host))
+    set(\.url, run.link(host: host))
     set(\.startedAt, run.runStartedAt ?? run.createdAt)
     set(\.activityAt, run.activityDate)
     set(\.median, eta?.median)
@@ -66,13 +66,6 @@ final class RunRowModel: Identifiable {
     _ path: ReferenceWritableKeyPath<RunRowModel, Value>, _ value: Value
   ) {
     if self[keyPath: path] != value { self[keyPath: path] = value }
-  }
-
-  private static func webURL(_ string: String?, host: String) -> URL? {
-    guard let string, let url = URL(string: string), url.scheme == "https",
-      url.host == host.split(separator: ":").first.map(String.init)
-    else { return nil }
-    return url
   }
 }
 

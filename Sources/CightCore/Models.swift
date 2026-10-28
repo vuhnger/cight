@@ -140,6 +140,13 @@ public struct WorkflowRun: Decodable, Sendable, Equatable, Identifiable {
     headBranch ?? "unknown"
   }
 
+  public func link(host: String) -> URL? {
+    guard let htmlUrl, let url = URL(string: htmlUrl), url.scheme == "https",
+      url.host?.lowercased() == host.split(separator: ":").first?.lowercased()
+    else { return nil }
+    return url
+  }
+
   public var pullRequestNumber: Int? {
     pullRequests?.first?.number
   }

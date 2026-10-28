@@ -73,7 +73,7 @@ public struct ToastContent: Sendable, Equatable {
       }
     return ToastContent(
       glyph: glyph, line1: event.repo, line2: "\(run.name ?? "Workflow") \(verb) on \(run.branch)",
-      pullRequest: run.pullRequestNumber, url: run.htmlUrl.flatMap(URL.init),
+      pullRequest: run.pullRequestNumber, url: run.link(host: event.host),
       isMergeRequest: run.isMergeRequest == true)
   }
 }
