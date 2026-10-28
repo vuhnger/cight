@@ -34,6 +34,7 @@ final class PanelController: NSObject {
   private let monitor: Monitor
   private let anchor: () -> NSRect?
   private let panel: GlassPanel
+  var onVisibilityChange: (Bool) -> Void = { _ in }
   private var machine = PanelMachine()
   private var timer: Task<Void, Never>?
   private var outsideClicks: Any?
@@ -129,6 +130,7 @@ final class PanelController: NSObject {
       panel.orderFrontRegardless()
       watchOutsideClicks()
       monitor.panelVisibilityChanged(true)
+      onVisibilityChange(true)
       measureFirstFrame()
     }
     if pinned { panel.makeKey() }
@@ -140,6 +142,7 @@ final class PanelController: NSObject {
     if let outsideClicks { NSEvent.removeMonitor(outsideClicks) }
     outsideClicks = nil
     monitor.panelVisibilityChanged(false)
+    onVisibilityChange(false)
   }
 
   private func measureFirstFrame() {

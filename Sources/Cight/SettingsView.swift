@@ -1,6 +1,5 @@
 import CightCore
 import SwiftUI
-import UserNotifications
 
 struct SettingsView: View {
   var notifier: Notifier
@@ -37,10 +36,6 @@ private struct GeneralPane: View {
       Toggle("Notify when a run fails", isOn: $notifier.settings.failed)
       Toggle("Notify when a failing run is fixed", isOn: $notifier.settings.fixed)
       Toggle("Notify when a run starts", isOn: $notifier.settings.started)
-      if notifier.authorization == .denied {
-        Text("Notifications are turned off for Cight in System Settings.")
-          .foregroundStyle(.orange).font(.callout)
-      }
 
       Divider()
 
@@ -53,6 +48,5 @@ private struct GeneralPane: View {
         .frame(maxWidth: .infinity, alignment: .trailing)
     }
     .frame(maxWidth: .infinity, alignment: .leading)
-    .task { await notifier.refreshAuthorization() }
   }
 }

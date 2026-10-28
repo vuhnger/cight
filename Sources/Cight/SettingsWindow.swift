@@ -17,7 +17,6 @@ final class SettingsWindow: NSObject, NSWindowDelegate {
 
   func windowDidBecomeKey(_ notification: Notification) {
     launchAtLogin.refresh()
-    Task { await notifier.refreshAuthorization() }
   }
 
   func show() {
