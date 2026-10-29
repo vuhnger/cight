@@ -112,7 +112,7 @@ struct MonitorProviderTests {
       await monitor.pollOnce()
       #expect(monitor.repos.map(\.id) == ["foo/bar"])
       #expect(monitor.repos.first?.branches.first?.rows.count == 1)
-      #expect(monitor.glyphs != [.signedOut])
+      #expect(monitor.menuBarGlyph != .signedOut)
       let expected: PanelNotice? = failure == .unauthorized ? .gitLabSignedOut : nil
       #expect(monitor.notice == expected)
     }

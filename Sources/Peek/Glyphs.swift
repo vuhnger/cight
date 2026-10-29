@@ -100,16 +100,12 @@ struct StateGlyph: View {
   }
 }
 
-struct MenuBarStrip: View {
-  let glyphs: [MenuBarGlyph]
+struct MenuBarIcon: View {
+  let glyph: MenuBarGlyph
 
   var body: some View {
-    HStack(spacing: 5) {
-      ForEach(Array(glyphs.enumerated()), id: \.offset) { _, glyph in
-        StateGlyph(kind: GlyphKind(glyph), size: Metrics.menuBarGlyph)
-      }
-    }
-    .padding(.horizontal, 2)
-    .environment(\.colorScheme, .dark)
+    StateGlyph(kind: GlyphKind(glyph), size: Metrics.menuBarGlyph)
+      .padding(.horizontal, 2)
+      .environment(\.colorScheme, .dark)
   }
 }

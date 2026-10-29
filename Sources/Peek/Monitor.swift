@@ -49,7 +49,7 @@ private final class Source {
 final class Monitor {
   private(set) var repos: [RepoModel] = []
   private(set) var notice: PanelNotice?
-  private(set) var glyphs: [MenuBarGlyph] = [.idle]
+  private(set) var menuBarGlyph: MenuBarGlyph = .idle
   private(set) var connections: [ConnectionRow] = []
   var onEvents: (([RunEvent]) -> Void)?
   var onSession: ((SessionState) -> Void)?
@@ -408,11 +408,11 @@ final class Monitor {
         ConnectionAccount(host: $0.provider.host, login: $0.viewer, signedOut: $0.signedOut)
       })
     if newConnections != connections { connections = newConnections }
-    let newGlyphs = MenuBarGlyphs.glyphs(
+    let newMenuBarGlyph = MenuBarGlyphs.glyph(
       repos: newOrder.compactMap { menuInputs[$0.id] },
       signedOut: (githubSignedOut || gitLabSignedOut) && newOrder.isEmpty,
       now: now)
-    if newGlyphs != glyphs { glyphs = newGlyphs }
+    if newMenuBarGlyph != menuBarGlyph { menuBarGlyph = newMenuBarGlyph }
     onSession?(
       SessionPolicy.sample(
         signedOutSignal: githubSignedOut, anySuccess: github?.anySuccess ?? false))
