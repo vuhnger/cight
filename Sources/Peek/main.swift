@@ -62,7 +62,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
           build: info?["CFBundleVersion"] as? String ?? "",
           system: ProcessInfo.processInfo.operatingSystemVersion))
     }
-    track({ [monitor] in monitor.glyphs }, apply: { [weak status] in status?.update($0) })
+    track({ [monitor] in monitor.menuBarGlyph }, apply: { [weak status] in status?.update($0) })
     self.status = status
     self.panel = panel
 

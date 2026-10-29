@@ -5,7 +5,7 @@ import SwiftUI
 @MainActor
 final class StatusItemController: NSObject {
   private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-  private var shown: [MenuBarGlyph] = []
+  private var shown: MenuBarGlyph?
   var onClick: () -> Void = {}
   var onMenu: (Bool) -> Void = { _ in }
   var onSettings: () -> Void = {}
@@ -26,14 +26,14 @@ final class StatusItemController: NSObject {
     item.button?.sendAction(on: [.leftMouseDown, .rightMouseDown])
   }
 
-  func update(_ glyphs: [MenuBarGlyph]) {
-    guard glyphs != shown else { return }
-    shown = glyphs
-    if glyphs == [.idle] {
+  func update(_ glyph: MenuBarGlyph) {
+    guard glyph != shown else { return }
+    shown = glyph
+    if glyph == .idle {
       item.button?.image = Self.idleImage
       return
     }
-    let renderer = ImageRenderer(content: MenuBarStrip(glyphs: glyphs))
+    let renderer = ImageRenderer(content: MenuBarIcon(glyph: glyph))
     renderer.scale = item.button?.window?.backingScaleFactor ?? 2
     let image = renderer.nsImage
     image?.isTemplate = false

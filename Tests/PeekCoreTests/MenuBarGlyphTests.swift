@@ -90,54 +90,99 @@ struct MenuBarGlyphTests {
     #expect(MenuBarGlyphs.glyph(for: repo([]), now: at(10)) == nil)
   }
 
-  @Test func glyphsKeepPanelOrderAndDropFailedPassedAndEmptyRepos() {
+  @Test func aQueuedRepoShowsQueuedNextToFailedPassedAndEmptyRepos() {
     let repos = [
       repo([makeRun(id: 1, conclusion: "failure")]), repo([makeRun(id: 2)]), repo([]),
       repo([makeRun(id: 3, conclusion: "skipped")]),
       repo([makeRun(id: 4, status: "queued", conclusion: nil)]),
     ]
-    #expect(MenuBarGlyphs.glyphs(repos: repos, signedOut: false, now: at(10)) == [.queued])
+    #expect(MenuBarGlyphs.glyph(repos: repos, signedOut: false, now: at(10)) == .queued)
   }
 
   @Test func failedAndPassedReposShowTheIdleIcon() {
     let repos = [repo([makeRun(id: 1, conclusion: "failure")]), repo([makeRun(id: 2)])]
-    #expect(MenuBarGlyphs.glyphs(repos: repos, signedOut: false, now: at(10)) == [.idle])
+    #expect(MenuBarGlyphs.glyph(repos: repos, signedOut: false, now: at(10)) == .idle)
   }
 
   @Test func aRepoWithAFailedAndARunningWorkflowShowsTheRunningGlyph() {
     let runs = [makeRun(id: 1, workflow: 1, conclusion: "failure"), running(id: 2, workflow: 2)]
     #expect(
-      MenuBarGlyphs.glyphs(repos: [repo(runs)], signedOut: false, now: at(10))
-        == [.running(progress: nil)])
+      MenuBarGlyphs.glyph(repos: [repo(runs)], signedOut: false, now: at(10))
+        == .running(progress: nil))
   }
 
   @Test func aFailedRepoNextToARunningOneShowsOnlyTheRunningGlyph() {
     let repos = [repo([makeRun(id: 1, conclusion: "failure")]), repo([running(id: 2)])]
     #expect(
-      MenuBarGlyphs.glyphs(repos: repos, signedOut: false, now: at(10))
-        == [.running(progress: nil)])
+      MenuBarGlyphs.glyph(repos: repos, signedOut: false, now: at(10))
+        == .running(progress: nil))
   }
 
   @Test func allPassedShowsTheIdleIcon() {
     let repos = [repo([makeRun(id: 1)]), repo([makeRun(id: 2)])]
-    #expect(MenuBarGlyphs.glyphs(repos: repos, signedOut: false, now: at(10)) == [.idle])
+    #expect(MenuBarGlyphs.glyph(repos: repos, signedOut: false, now: at(10)) == .idle)
   }
 
   @Test func nothingWatchedShowsTheIdleIcon() {
-    #expect(MenuBarGlyphs.glyphs(repos: [], signedOut: false, now: at(10)) == [.idle])
-    #expect(MenuBarGlyphs.glyphs(repos: [repo([])], signedOut: false, now: at(10)) == [.idle])
+    #expect(MenuBarGlyphs.glyph(repos: [], signedOut: false, now: at(10)) == .idle)
+    #expect(MenuBarGlyphs.glyph(repos: [repo([])], signedOut: false, now: at(10)) == .idle)
   }
 
   @Test func mixedActiveAndPassedShowsOnlyTheActiveOnes() {
     let repos = [repo([makeRun(id: 1)]), repo([running(id: 2)]), repo([makeRun(id: 3)])]
     #expect(
-      MenuBarGlyphs.glyphs(repos: repos, signedOut: false, now: at(10))
-        == [.running(progress: nil)])
+      MenuBarGlyphs.glyph(repos: repos, signedOut: false, now: at(10))
+        == .running(progress: nil))
+  }
+
+  @Test func twoReposRunningAtOnceShowOneGlyph() {
+    let repos = [repo([running(id: 1)]), repo([running(id: 2)])]
+    #expect(
+      MenuBarGlyphs.glyph(repos: repos, signedOut: false, now: at(10))
+        == .running(progress: nil))
+  }
+
+  @Test func anOverdueRepoWinsOverARunningRepo() {
+    let repos = [
+      repo([running(id: 1, started: 80)], history: history()),
+      repo([running(id: 2, started: 0)], history: history()),
+    ]
+    #expect(MenuBarGlyphs.glyph(repos: repos, signedOut: false, now: at(90)) == .overdue)
+  }
+
+  @Test func theOldestRunAcrossReposSetsTheProgress() {
+    let repos = [
+      repo([running(id: 1, started: 20)], history: history()),
+      repo([running(id: 2, started: 0)], history: history()),
+    ]
+    #expect(
+      MenuBarGlyphs.glyph(repos: repos, signedOut: false, now: at(30))
+        == .running(progress: 0.5))
+  }
+
+  @Test func eachRunUsesItsOwnReposHistory() {
+    let ownHistory = [repo([running(id: 1)], history: history()), repo([])]
+    let otherHistory = [repo([running(id: 1)]), repo([], history: history())]
+    #expect(
+      MenuBarGlyphs.glyph(repos: ownHistory, signedOut: false, now: at(30))
+        == .running(progress: 0.5))
+    #expect(
+      MenuBarGlyphs.glyph(repos: otherHistory, signedOut: false, now: at(30))
+        == .running(progress: nil))
+  }
+
+  @Test func aRunningRepoBeatsAQueuedRepo() {
+    let repos = [
+      repo([makeRun(id: 1, status: "queued", conclusion: nil)]), repo([running(id: 2)]),
+    ]
+    #expect(
+      MenuBarGlyphs.glyph(repos: repos, signedOut: false, now: at(10))
+        == .running(progress: nil))
   }
 
   @Test func signedOutIsASingleLockWhateverTheRepos() {
     let repos = [repo([makeRun(id: 1, conclusion: "failure")]), repo([makeRun(id: 2)])]
-    #expect(MenuBarGlyphs.glyphs(repos: repos, signedOut: true, now: at(10)) == [.signedOut])
-    #expect(MenuBarGlyphs.glyphs(repos: [], signedOut: true, now: at(10)) == [.signedOut])
+    #expect(MenuBarGlyphs.glyph(repos: repos, signedOut: true, now: at(10)) == .signedOut)
+    #expect(MenuBarGlyphs.glyph(repos: [], signedOut: true, now: at(10)) == .signedOut)
   }
 }
