@@ -366,7 +366,7 @@ final class Monitor {
         apply(fetched, to: model)
         menuInputs[id] = MenuBarRepo(visible: visible, history: fetched.rawRuns)
         var tracker = trackers[id] ?? RunTracker()
-        events += tracker.ingest(repo: id, runs: fetched.rawRuns, host: fetched.host)
+        events += tracker.ingest(repo: id, runs: visible, host: fetched.host)
         trackers[id] = tracker
       case .failure(.notFound):
         model.problem = .gone

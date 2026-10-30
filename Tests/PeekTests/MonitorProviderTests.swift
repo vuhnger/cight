@@ -82,6 +82,37 @@ private final class RecordingProvider: RunProvider, @unchecked Sendable {
   }
 }
 
+private final class ScriptedProvider: RunProvider, @unchecked Sendable {
+  let host = Repo.githubHost
+  let repo: Repo
+  private let lock = NSLock()
+  private var current: [WorkflowRun] = []
+
+  init(repo: Repo) { self.repo = repo }
+
+  func set(_ runs: [WorkflowRun]) { lock.withLock { current = runs } }
+
+  func viewer() async throws -> Viewer { Viewer(id: 1, login: "me") }
+  func repos() async throws -> [Repo] { [repo] }
+  func latestRun(repo: Repo, actor: String, since: Date) async throws -> WorkflowRun? {
+    lock.withLock { current.first }
+  }
+  func branches(repo: Repo) async throws -> Set<String>? { nil }
+  func runs(repo: Repo) async throws -> [WorkflowRun] { lock.withLock { current } }
+}
+
+private func pullRequestRun(_ id: Int, branch: String, actor: String, status: String)
+  -> WorkflowRun
+{
+  let conclusion = status == "completed" ? "\"success\"" : "null"
+  let json = """
+    {"id":\(id),"workflow_id":1,"status":"\(status)","conclusion":\(conclusion),\
+    "event":"pull_request","created_at":"\(Date().ISO8601Format())","head_branch":"\(branch)",\
+    "actor":{"login":"\(actor)","id":1},"head_repository":{"id":1,"full_name":"foo/bar"}}
+    """
+  return try! JSONDecoder.github.decode(WorkflowRun.self, from: Data(json.utf8))
+}
+
 private func repo(host: String, id: Int = 1) -> Repo {
   Repo(
     id: id, name: "bar", fullName: "foo/bar", defaultBranch: "main", pushedAt: Date(), host: host)
@@ -96,6 +127,26 @@ struct MonitorProviderTests {
     #expect(github.lookedUp == [[1, 3]])
     let rows = monitor.repos.first?.branches.flatMap(\.rows) ?? []
     #expect(rows.contains { $0.pullRequest == 42 })
+  }
+
+  @Test func notificationsCoverTheSameRunsAsThePanel() async {
+    let github = ScriptedProvider(repo: repo(host: Repo.githubHost))
+    let monitor = Monitor(github: github, gitLab: { [] })
+    var events: [RunEvent] = []
+    monitor.onEvents = { events += $0 }
+    github.set([
+      pullRequestRun(1, branch: "mine", actor: "me", status: "completed"),
+      pullRequestRun(2, branch: "theirs", actor: "someone", status: "completed"),
+    ])
+    await monitor.pollOnce()
+    github.set([
+      pullRequestRun(3, branch: "mine", actor: "me", status: "in_progress"),
+      pullRequestRun(4, branch: "theirs", actor: "someone", status: "in_progress"),
+    ])
+    await monitor.pollOnce()
+    let shown = monitor.repos.flatMap(\.branches).flatMap(\.rows).map(\.id)
+    #expect(shown == [3])
+    #expect(events.map(\.run.id) == shown)
   }
 
   @Test func aFailingGitLabHostLeavesGitHubResultsIntact() async {
